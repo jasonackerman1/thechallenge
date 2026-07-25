@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The Challenge S42: Cutthroat — Fantasy League</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-void: #0b0b0d;
+      --bg-panel: #16161a;
+      --accent-burnt-orange: #d1571f;
+      --text-primary: #ece7e1;
+      --text-muted: #9a9590;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px;
+      background: var(--bg-void);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+    h1 { color: var(--accent-burnt-orange); font-size: 1.25rem; letter-spacing: 0.04em; }
+    p.note { color: var(--text-muted); font-size: 0.85rem; }
+    form#setup-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 420px;
+      background: var(--bg-panel);
+      padding: 16px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    input, button {
+      padding: 10px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: #0d0d0f;
+      color: var(--text-primary);
+      font-size: 0.9rem;
+    }
+    button {
+      background: var(--accent-burnt-orange);
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    #status { margin: 16px 0; font-size: 0.9rem; }
+    .actions { display: flex; gap: 10px; margin: 16px 0; }
+    .actions button { flex: none; }
+    pre {
+      background: var(--bg-panel);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      padding: 12px;
+      max-height: 400px;
+      overflow: auto;
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>THE CHALLENGE S42: CUTTHROAT — FANTASY LEAGUE</h1>
+  <p class="note">Milestone 1 debug shell — data layer only. Real commissioner/player UI comes in later milestones.</p>
+
+  <form id="setup-form">
+    <label>
+      GitHub Gist Personal Access Token
+      <input id="token-input" type="password" autocomplete="off" placeholder="ghp_..." />
+    </label>
+    <label>
+      Gist ID
+      <input id="gistid-input" type="text" autocomplete="off" placeholder="e.g. 1a2b3c4d5e6f..." />
+    </label>
+    <button type="submit">Connect</button>
+  </form>
+
+  <div id="status"></div>
+
+  <div class="actions">
+    <button id="seed-button" type="button">Seed Initial Data (first-time setup only)</button>
+    <button id="reload-button" type="button">Force Reload from Gist</button>
+  </div>
+
+  <h2>Raw state.json</h2>
+  <pre id="state-dump">(not loaded yet)</pre>
+
+  <h2>Computed leaderboard (scoring.js output)</h2>
+  <pre id="leaderboard-dump">(not loaded yet)</pre>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
