@@ -1,12 +1,13 @@
-// Milestone-1 bootstrap: first-run credential prompt, initial load, and a bare debug view
-// so the data layer (state.js / gist.js / draft.js / scoring.js) can be verified end-to-end
-// before any real commissioner/player UI exists. This file gets replaced by the router +
-// view modules in later milestones.
+// Milestone-3 bootstrap: credential prompt, initial load, commissioner password gate, and the
+// preseason draft setup view, layered on top of the Milestone-1 debug dump (state.js / gist.js /
+// draft.js / scoring.js). This file gets replaced by the real hash-based view router later.
 
 import { loadCredentials, saveCredentials, loadCachedState, saveCachedState } from './state.js';
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
 import { computeLeaderboard } from './scoring.js';
+import { shuffle, buildDraftBoard, computeRosterSize, validatePick } from './draft.js';
+import { renderPreseasonDraft, renderEpisodeEntry, getCurrentEpisode } from './views/commissioner.js';
 
 const els = {
   setupForm: document.getElementById('setup-form'),
@@ -17,7 +18,15 @@ const els = {
   reloadButton: document.getElementById('reload-button'),
   stateDump: document.getElementById('state-dump'),
   leaderboardDump: document.getElementById('leaderboard-dump'),
+  unlockForm: document.getElementById('unlock-form'),
+  passwordInput: document.getElementById('password-input'),
+  commissionerPanel: document.getElementById('commissioner-panel'),
+  draftContainer: document.getElementById('draft-container'),
+  episodeContainer: document.getElementById('episode-container'),
 };
+
+let currentState = null;
+let unlocked = false;
 
 function setStatus(message, isError = false) {
   els.status.textContent = message;
@@ -25,8 +34,102 @@ function setStatus(message, isError = false) {
 }
 
 function render(state) {
+  currentState = state;
   els.stateDump.textContent = JSON.stringify(state, null, 2);
-  els.leaderboardDump.textContent = JSON.stringify(computeLeaderboard(state), null, 2);
+  els.leaderboardDump.textContent = state?.managers
+    ? JSON.stringify(computeLeaderboard(state), null, 2)
+    : '(not seeded yet — click "Seed Initial Data")';
+  if (unlocked && state?.managers) {
+    renderDraft();
+    renderEpisode();
+  }
+}
+
+function renderEpisode() {
+  renderEpisodeEntry(els.episodeContainer, currentState, {
+    onStartEpisode: (episodeNumber) =>
+      runMutation((fresh) => {
+        fresh.episodes.push({
+          episodeNumber,
+          finalized: false,
+          scoringEvents: [],
+          confessionalMinutes: [],
+          eliminations: [],
+        });
+        return fresh;
+      }),
+    onAddScoringEvent: ({ castId, type, count }) =>
+      runMutation((fresh) => {
+        getCurrentEpisode(fresh).scoringEvents.push({ id: crypto.randomUUID(), castId, type, count });
+        return fresh;
+      }),
+    onRemoveScoringEvent: (eventId) =>
+      runMutation((fresh) => {
+        const episode = getCurrentEpisode(fresh);
+        episode.scoringEvents = episode.scoringEvents.filter((ev) => ev.id !== eventId);
+        return fresh;
+      }),
+    onSetConfessional: ({ castId, minutes }) =>
+      runMutation((fresh) => {
+        const episode = getCurrentEpisode(fresh);
+        const existing = episode.confessionalMinutes.find((c) => c.castId === castId);
+        if (existing) existing.minutes = minutes;
+        else episode.confessionalMinutes.push({ castId, minutes });
+        return fresh;
+      }),
+    onSaveEliminations: (castIds) =>
+      runMutation((fresh) => {
+        getCurrentEpisode(fresh).eliminations = castIds.map((castId) => ({ castId }));
+        return fresh;
+      }),
+    onFinalizeEpisode: () =>
+      runMutation((fresh) => {
+        getCurrentEpisode(fresh).finalized = true;
+        return fresh;
+      }),
+    onUnfinalizeLastEpisode: () =>
+      runMutation((fresh) => {
+        fresh.episodes[fresh.episodes.length - 1].finalized = false;
+        return fresh;
+      }),
+  });
+}
+
+function renderDraft() {
+  renderPreseasonDraft(els.draftContainer, currentState, {
+    onStartDraft: () =>
+      runMutation((fresh) => {
+        const activeManagers = fresh.managers.filter((m) => m.active);
+        const rounds = computeRosterSize(fresh.cast.length, activeManagers.length);
+        const board = buildDraftBoard(shuffle(activeManagers.map((m) => m.id)), rounds);
+        fresh.drafts.preseason = { board, picks: [] };
+        return fresh;
+      }),
+    onPick: ({ managerId, castId, round }) =>
+      runMutation((fresh) => {
+        const picks = fresh.drafts.preseason.picks;
+        validatePick({ board: fresh.drafts.preseason.board, picks, eliminatedCastIds: new Set(), managerId, castId });
+        picks.push({ managerId, castId, round });
+        return fresh;
+      }),
+    onResetDraft: () =>
+      runMutation((fresh) => {
+        fresh.drafts.preseason = null;
+        return fresh;
+      }),
+  });
+}
+
+async function runMutation(mutate) {
+  const creds = loadCredentials();
+  if (!creds) return setStatus('Connect first.', true);
+  setStatus('Saving...');
+  try {
+    await commitMutation(creds.token, creds.gistId, mutate);
+    await loadAndRender(creds.token, creds.gistId);
+  } catch (err) {
+    setStatus(`Save failed: ${err.message}`, true);
+  }
 }
 
 async function loadAndRender(token, gistId) {
@@ -90,6 +193,25 @@ function boot() {
     const creds = loadCredentials();
     if (!creds) return setStatus('Connect first.', true);
     loadAndRender(creds.token, creds.gistId).catch((err) => setStatus(err.message, true));
+  });
+
+  els.unlockForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const password = els.passwordInput.value;
+    els.passwordInput.value = '';
+    if (!currentState?.meta?.commissionerPasswordHash) {
+      return setStatus('Seed initial data first.', true);
+    }
+    const hash = await hashPassword(password);
+    if (hash === currentState.meta.commissionerPasswordHash) {
+      unlocked = true;
+      els.unlockForm.style.display = 'none';
+      els.commissionerPanel.style.display = '';
+      renderDraft();
+      renderEpisode();
+    } else {
+      setStatus('Wrong commissioner password.', true);
+    }
   });
 }
 

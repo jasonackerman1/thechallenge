@@ -1,4 +1,4 @@
-# Project Status — paused 2026-07-25
+# Project Status — updated 2026-07-28
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -19,10 +19,18 @@ Validated with direct node scripts: 24 cast ÷ 5 managers → correct 4-round sn
 round reversal; exclusivity correctly blocks double-claimed/eliminated cast; scoring formulas
 match hand-calculated expectations.
 
+Confirmed 2026-07-28: Jay created his real GitHub token + Gist, connected the debug shell,
+seeded initial data, and verified the leaderboard via "Force Reload from Gist" — the full
+Gist round-trip works end-to-end. (Along the way, fixed a bug in `js/app.js`'s `render()` that
+crashed with "state.managers is not iterable" when connecting to a freshly-created empty
+`{}` Gist, before seeding.)
+
 ## Not done yet
 
-- Jay has not confirmed he's created his real GitHub token + Gist and run the live round-trip test.
-- Nothing has been committed to git yet.
+- **The live Gist Jay already seeded still has old test data with "Victoria" (inactive)** — since
+  `buildInitialState()` is a one-time seed function, this code fix doesn't retroactively touch
+  data already written to the Gist. Re-run "Seed Initial Data" (wipes it, fine since it's just
+  test data) or edit the Gist's `state.json` by hand before starting real Milestone 3 testing.
 - **Milestone 3 (commissioner scoring UI) is next** — episode entry, eliminations, confessional
   minutes, preseason draft setup, redraft-twist toggle, manual roster-freeze toggle + endgame-scarcity
   warning banner, Victoria toggle. This replaces the debug shell.
@@ -42,8 +50,9 @@ match hand-calculated expectations.
 - **Endgame scarcity** (cast pool eventually too thin for everyone to redraft) is a real
   acknowledged open problem — see the plan's "Endgame Scarcity Handling" section for the
   recommended fix (roster-size floor + in-app warning + manual freeze as the off-ramp).
-- **Victoria's active/inactive default is still genuinely undecided** — Jay is checking with her
-  directly (she just had a baby). The toggle is built as all-or-nothing either way.
+- **Resolved 2026-07-28: Victoria is out, her husband Steve plays in her place.** Still 6 managers
+  total. No active/inactive toggle needed — Steve is just a regular active manager like everyone
+  else. `js/seed.js` updated (`victoria` id/name swapped for `steve`, `active: true`).
 
 ## Setup instructions for the debug shell (given to Jay, unconfirmed if completed)
 

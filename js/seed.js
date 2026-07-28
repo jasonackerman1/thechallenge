@@ -27,7 +27,7 @@ export function buildInitialState({ commissionerPasswordHash }) {
     { id: 'owen', name: 'Owen', isCommissioner: false, active: true },
     { id: 'joe', name: 'Joe', isCommissioner: false, active: true },
     { id: 'danielle', name: 'Danielle', isCommissioner: false, active: true },
-    { id: 'victoria', name: 'Victoria', isCommissioner: false, active: false },
+    { id: 'steve', name: 'Steve', isCommissioner: false, active: true },
   ];
 
   return {
