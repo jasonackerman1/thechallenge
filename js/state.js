@@ -3,6 +3,7 @@
 const STATE_CACHE_KEY = 'challenge-fantasy:state';
 const PENDING_WRITES_KEY = 'challenge-fantasy:pendingWrites';
 const CREDENTIALS_KEY = 'challenge-fantasy:credentials';
+const PLAYER_IDENTITY_KEY = 'challenge-fantasy:playerIdentity';
 const SCHEMA_VERSION = 1;
 
 export function loadCachedState() {
@@ -60,6 +61,21 @@ export function saveCredentials({ token, gistId }) {
 
 export function clearCredentials() {
   localStorage.removeItem(CREDENTIALS_KEY);
+}
+
+/** Which manager this device belongs to — a per-device convenience, not real auth (same
+ *  trusted-family model as the commissioner password: good enough to keep siblings from
+ *  accidentally acting as each other, not meant to stop anyone determined to). */
+export function loadPlayerIdentity() {
+  return localStorage.getItem(PLAYER_IDENTITY_KEY);
+}
+
+export function savePlayerIdentity(managerId) {
+  localStorage.setItem(PLAYER_IDENTITY_KEY, managerId);
+}
+
+export function clearPlayerIdentity() {
+  localStorage.removeItem(PLAYER_IDENTITY_KEY);
 }
 
 export function migrateSchema(state) {

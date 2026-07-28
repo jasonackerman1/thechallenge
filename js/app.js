@@ -2,12 +2,23 @@
 // preseason draft setup view, layered on top of the Milestone-1 debug dump (state.js / gist.js /
 // draft.js / scoring.js). This file gets replaced by the real hash-based view router later.
 
-import { loadCredentials, saveCredentials, loadCachedState, saveCachedState } from './state.js';
+import { loadCredentials, saveCredentials, loadCachedState, saveCachedState, loadPlayerIdentity, savePlayerIdentity } from './state.js';
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
-import { computeLeaderboard } from './scoring.js';
-import { shuffle, buildDraftBoard, computeRosterSize, validatePick } from './draft.js';
-import { renderPreseasonDraft, renderEpisodeEntry, getCurrentEpisode } from './views/commissioner.js';
+import { computeLeaderboard, computeNextDraftOrder, computeEliminationEpisodes } from './scoring.js';
+import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
+import {
+  renderPreseasonDraft,
+  renderEpisodeEntry,
+  renderWeeklyRedraft,
+  renderFinalChallengeEntry,
+  getCurrentEpisode,
+  nextEpisodeNumber,
+  rostersReadyForEpisode,
+  getCurrentRedraftWeek,
+  nextRedraftWeek,
+} from './views/commissioner.js';
+import { renderIdentityModal, renderIdentityIndicator, renderLeaderboard, renderMyRoster } from './views/player.js';
 
 const els = {
   setupForm: document.getElementById('setup-form'),
@@ -23,6 +34,12 @@ const els = {
   commissionerPanel: document.getElementById('commissioner-panel'),
   draftContainer: document.getElementById('draft-container'),
   episodeContainer: document.getElementById('episode-container'),
+  redraftContainer: document.getElementById('redraft-container'),
+  finalChallengeContainer: document.getElementById('final-challenge-container'),
+  identityContainer: document.getElementById('identity-container'),
+  identityModal: document.getElementById('identity-modal'),
+  leaderboardContainer: document.getElementById('leaderboard-container'),
+  myRosterContainer: document.getElementById('my-roster-container'),
 };
 
 let currentState = null;
@@ -39,16 +56,112 @@ function render(state) {
   els.leaderboardDump.textContent = state?.managers
     ? JSON.stringify(computeLeaderboard(state), null, 2)
     : '(not seeded yet — click "Seed Initial Data")';
+  if (state?.managers) {
+    renderPlayerView();
+  }
   if (unlocked && state?.managers) {
     renderDraft();
     renderEpisode();
+    renderRedraft();
+    renderFinalChallenge();
   }
+}
+
+function openIdentityModal() {
+  renderIdentityModal(els.identityModal, currentState, {
+    onSetIdentity: (managerId) => {
+      savePlayerIdentity(managerId);
+      els.identityModal.style.display = 'none';
+      renderPlayerView();
+    },
+  });
+  els.identityModal.style.display = 'flex';
+}
+
+function renderPlayerView() {
+  const currentManagerId = loadPlayerIdentity();
+  renderIdentityIndicator(els.identityContainer, currentState, currentManagerId, {
+    onSwitch: openIdentityModal,
+  });
+  renderLeaderboard(els.leaderboardContainer, currentState, currentManagerId);
+  renderMyRoster(els.myRosterContainer, currentState, currentManagerId, {
+    onPick: (castId) =>
+      runMutation((fresh) => {
+        const managerId = loadPlayerIdentity();
+        const week = getCurrentRedraftWeek(fresh);
+        if (week === null) throw new Error('No redraft is currently open.');
+        const draft = fresh.drafts.weekly[String(week)];
+        const flat = flattenDraftBoard(draft.board);
+        const nextSlot = flat[draft.picks.length];
+        if (nextSlot.managerId !== managerId) {
+          throw new Error("It's not your turn anymore — someone else just picked. Refresh and try again.");
+        }
+        const eliminatedCastIds = new Set(computeEliminationEpisodes(fresh.episodes).keys());
+        validatePick({ board: draft.board, picks: draft.picks, eliminatedCastIds, managerId, castId });
+        draft.picks.push({ managerId, castId, round: nextSlot.round });
+        return fresh;
+      }),
+  });
+  if (!currentManagerId) openIdentityModal();
+}
+
+function renderFinalChallenge() {
+  renderFinalChallengeEntry(els.finalChallengeContainer, currentState, {
+    onSetFinalChallenge: ({ winner, second, third }) =>
+      runMutation((fresh) => {
+        fresh.finalChallenge = { completed: true, winner, second, third };
+        return fresh;
+      }),
+    onResetFinalChallenge: () =>
+      runMutation((fresh) => {
+        fresh.finalChallenge = { completed: false, winner: null, second: null, third: null };
+        return fresh;
+      }),
+  });
+}
+
+function renderRedraft() {
+  renderWeeklyRedraft(els.redraftContainer, currentState, {
+    onStartRedraft: () =>
+      runMutation((fresh) => {
+        const week = nextRedraftWeek(fresh);
+        const baseOrder = computeNextDraftOrder(fresh);
+        if (!baseOrder) throw new Error('Rosters are frozen.');
+        const board = buildStraightBoard(baseOrder, TARGET_ROSTER_SIZE);
+        fresh.drafts.weekly[String(week)] = { board, picks: [] };
+        return fresh;
+      }),
+    onPick: ({ managerId, castId, round }) =>
+      runMutation((fresh) => {
+        const week = getCurrentRedraftWeek(fresh);
+        const draft = fresh.drafts.weekly[String(week)];
+        const eliminatedCastIds = new Set(computeEliminationEpisodes(fresh.episodes).keys());
+        validatePick({ board: draft.board, picks: draft.picks, eliminatedCastIds, managerId, castId });
+        draft.picks.push({ managerId, castId, round });
+        return fresh;
+      }),
+    onResetRedraft: () =>
+      runMutation((fresh) => {
+        const week = getCurrentRedraftWeek(fresh);
+        if (week) delete fresh.drafts.weekly[String(week)];
+        return fresh;
+      }),
+    onToggleFreeze: () =>
+      runMutation((fresh) => {
+        fresh.meta.rosterFrozen = !fresh.meta.rosterFrozen;
+        return fresh;
+      }),
+  });
 }
 
 function renderEpisode() {
   renderEpisodeEntry(els.episodeContainer, currentState, {
     onStartEpisode: (episodeNumber) =>
       runMutation((fresh) => {
+        const n = nextEpisodeNumber(fresh);
+        if (episodeNumber !== n || !rostersReadyForEpisode(fresh, n)) {
+          throw new Error(`Episode ${n} isn't ready to start yet — rosters aren't set.`);
+        }
         fresh.episodes.push({
           episodeNumber,
           finalized: false,
@@ -100,8 +213,7 @@ function renderDraft() {
     onStartDraft: () =>
       runMutation((fresh) => {
         const activeManagers = fresh.managers.filter((m) => m.active);
-        const rounds = computeRosterSize(fresh.cast.length, activeManagers.length);
-        const board = buildDraftBoard(shuffle(activeManagers.map((m) => m.id)), rounds);
+        const board = buildDraftBoard(shuffle(activeManagers.map((m) => m.id)), TARGET_ROSTER_SIZE);
         fresh.drafts.preseason = { board, picks: [] };
         return fresh;
       }),
@@ -209,6 +321,8 @@ function boot() {
       els.commissionerPanel.style.display = '';
       renderDraft();
       renderEpisode();
+      renderRedraft();
+      renderFinalChallenge();
     } else {
       setStatus('Wrong commissioner password.', true);
     }

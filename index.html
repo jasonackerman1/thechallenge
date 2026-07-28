@@ -103,11 +103,76 @@
       flex-shrink: 0;
       margin: 0;
     }
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 100;
+    }
+    .modal-card {
+      background: var(--bg-panel);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 360px;
+      width: 100%;
+    }
+    .modal-card h3 { margin-top: 0; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+    th, td {
+      padding: 8px 10px;
+      text-align: right;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    th {
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 600;
+    }
+
+    /* Mobile is the baseline above; these widen things out and let a few control rows go
+       horizontal once there's room to spare, instead of just stretching phone spacing thinner. */
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .control-row > button { margin-top: 0; }
+
+    @media (min-width: 640px) {
+      body { max-width: 640px; padding: 24px; font-size: 17px; }
+      h1 { font-size: 1.35rem; }
+      h2 { font-size: 1.15rem; }
+      h3 { font-size: 1.1rem; }
+      .control-row { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
+      .control-row > select,
+      .control-row > input { flex: 1 1 160px; width: auto; }
+      .control-row > button { width: auto; flex: 0 0 auto; }
+      .checkbox-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 20px; }
+      label.checkbox-row { border-bottom: none; }
+    }
+
+    @media (min-width: 960px) {
+      body { max-width: 860px; padding: 40px; }
+      h1 { font-size: 1.55rem; }
+      .checkbox-grid { grid-template-columns: repeat(3, 1fr); }
+    }
   </style>
 </head>
 <body>
   <h1>THE CHALLENGE S42: CUTTHROAT — FANTASY LEAGUE</h1>
   <p class="note">Milestone 1 debug shell — data layer only. Real commissioner/player UI comes in later milestones.</p>
+
+  <div id="identity-container"></div>
 
   <form id="setup-form">
     <label>
@@ -128,6 +193,12 @@
     <button id="reload-button" type="button">Force Reload from Gist</button>
   </div>
 
+  <h2>My Roster</h2>
+  <div id="my-roster-container"></div>
+
+  <h2>Leaderboard</h2>
+  <div id="leaderboard-container"></div>
+
   <h2>Commissioner</h2>
   <form id="unlock-form">
     <input id="password-input" type="password" autocomplete="off" placeholder="Commissioner password" />
@@ -139,6 +210,12 @@
 
     <h3>Episode Entry</h3>
     <div id="episode-container"></div>
+
+    <h3>Weekly Redraft</h3>
+    <div id="redraft-container"></div>
+
+    <h3>Final Challenge</h3>
+    <div id="final-challenge-container"></div>
   </div>
 
   <h2>Raw state.json</h2>
@@ -146,6 +223,8 @@
 
   <h2>Computed leaderboard (scoring.js output)</h2>
   <pre id="leaderboard-dump">(not loaded yet)</pre>
+
+  <div id="identity-modal" class="modal-overlay" style="display:none;"></div>
 
   <script type="module" src="js/app.js"></script>
 </body>

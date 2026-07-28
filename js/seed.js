@@ -10,15 +10,29 @@ function slug(name) {
     .replace(/(^-|-$)/g, '');
 }
 
+// Names + gender confirmed against the real Season 42 (Cutthroat) cast list (Variety/Deadline/
+// TVLine coverage, cross-checked individually for the less-common names). "Tori" = Victoria
+// Deal, "Izzy" = Isabella Fairthorne, "Lete" = Alexis Lete, "Chris" (Grey) = Chris Underwood —
+// kept as the shorter names here since that's how the roster displays in the app either way.
+// Exactly 12M/12F, 4-and-4 within each team.
 const CAST_BY_TEAM = {
-  Blue: ['Cara Maria', 'Cedric', 'Reilly', 'Lete', 'Anna Leigh', 'Nelson', 'Josh', 'Brad'],
-  Orange: ['Will', 'Deb', 'Tori', 'Bananas', 'Justin', 'Michele', 'Izzy', 'CT'],
-  Grey: ['Cory', 'Nurys', 'Adrienne', 'Cassidy', 'Chris', 'Sydney', 'Leo', 'Keanu'],
+  Blue: [
+    ['Cara Maria', 'F'], ['Cedric', 'M'], ['Reilly', 'F'], ['Lete', 'F'],
+    ['Anna Leigh', 'F'], ['Nelson', 'M'], ['Josh', 'M'], ['Brad', 'M'],
+  ],
+  Orange: [
+    ['Will', 'M'], ['Deb', 'F'], ['Tori', 'F'], ['Bananas', 'M'],
+    ['Justin', 'M'], ['Michele', 'F'], ['Izzy', 'F'], ['CT', 'M'],
+  ],
+  Grey: [
+    ['Cory', 'M'], ['Nurys', 'F'], ['Adrienne', 'F'], ['Cassidy', 'F'],
+    ['Chris', 'M'], ['Sydney', 'F'], ['Leo', 'M'], ['Keanu', 'M'],
+  ],
 };
 
 export function buildInitialState({ commissionerPasswordHash }) {
-  const cast = Object.entries(CAST_BY_TEAM).flatMap(([team, names]) =>
-    names.map((name) => ({ id: slug(name), name, team, eliminatedEpisode: null }))
+  const cast = Object.entries(CAST_BY_TEAM).flatMap(([team, entries]) =>
+    entries.map(([name, gender]) => ({ id: slug(name), name, team, gender, eliminatedEpisode: null }))
   );
 
   const managers = [

@@ -2,10 +2,23 @@
 // weekly redraft (see plan §"Decisions Confirmed": "one system, reused every week, all
 // season"). Pure logic, no I/O, so it's testable directly in a console.
 //
-// Mechanic: a snake draft. Round 1 goes in a "base order" (random for the preseason
-// draft, reverse-standings for every weekly redraft); round 2 reverses that order, round
-// 3 restores it, and so on. The draft runs until every manager has an equal-sized roster —
-// roster size is derived from the shrinking cast pool, not fixed (see computeRosterSize).
+// Mechanic: every manager always targets TARGET_ROSTER_SIZE. The board is always built for
+// that many rounds regardless of how thin the surviving cast pool has gotten — the draft
+// just runs pick by pick until either every slot is filled or the pool runs dry, whichever
+// comes first (see isDraftComplete). Whoever's picking when the pool runs out that week ends
+// up with fewer than the target — that's intentional, not a bug to work around (confirmed
+// against a season simulation: the reverse-standings redraft is what's supposed to let a
+// shortchanged manager catch up the following week).
+//
+// The preseason draft uses a snake board (buildDraftBoard) from a one-time random order.
+// Every weekly redraft uses a straight board (buildStraightBoard) — same reverse-standings
+// order every round, no reversal — chosen deliberately over snake after simulating both: a
+// snake board's final round always reverses back to worst-picks-first, which means "picks
+// last overall" lands on whoever is CURRENTLY WORST, so a thin pool systematically shortchanges
+// the team the mechanic is supposed to be helping. Straight order shortchanges the
+// currently-best team instead, which is the equalizing effect that was actually intended.
+
+export const TARGET_ROSTER_SIZE = 4;
 
 /** Fisher-Yates shuffle. Only ever used for the preseason draft's one-time random order. */
 export function shuffle(array) {
@@ -18,25 +31,26 @@ export function shuffle(array) {
 }
 
 /**
- * Roster size for a draft: as many full rounds as the eligible cast pool can support
- * split evenly across drafting managers, floored at a minimum of 1 (see plan's
- * "Endgame Scarcity Handling" — this is what keeps a draft meaningful even once the
- * cast pool gets thin from eliminations).
- */
-export function computeRosterSize(eligibleCastCount, managerCount) {
-  if (managerCount <= 0) return 0;
-  return Math.max(1, Math.floor(eligibleCastCount / managerCount));
-}
-
-/**
  * Builds the full draft board: an array of rounds, each an array of managerIds in pick
  * order for that round. Round indices alternate direction (snake) starting from
- * `baseOrder` for round 1.
+ * `baseOrder` for round 1. Used for the preseason draft.
  */
 export function buildDraftBoard(baseOrder, rounds) {
   const board = [];
   for (let round = 0; round < rounds; round++) {
     board.push(round % 2 === 0 ? [...baseOrder] : [...baseOrder].reverse());
+  }
+  return board;
+}
+
+/**
+ * Builds a straight (non-snake) draft board: every round uses the same pick order. Used for
+ * every weekly redraft — see the module comment above for why this replaced snake there.
+ */
+export function buildStraightBoard(baseOrder, rounds) {
+  const board = [];
+  for (let round = 0; round < rounds; round++) {
+    board.push([...baseOrder]);
   }
   return board;
 }
@@ -75,9 +89,15 @@ export function nextSlotForManager(board, picks, managerId) {
   return flat.find((slot) => slot.managerId === managerId && !madeByRound.has(slot.round)) ?? null;
 }
 
-export function isDraftComplete(board, picks) {
+/**
+ * A draft is complete once every slot is filled OR the surviving cast pool has run dry —
+ * whichever comes first. The pool-ran-dry case is what leaves some managers short of
+ * TARGET_ROSTER_SIZE for the week (see module comment).
+ */
+export function isDraftComplete(board, picks, allCastIds, eliminatedCastIds) {
   const totalSlots = board.reduce((sum, round) => sum + round.length, 0);
-  return picks.length >= totalSlots;
+  if (picks.length >= totalSlots) return true;
+  return getAvailableCast(allCastIds, eliminatedCastIds, picks).length === 0;
 }
 
 /**

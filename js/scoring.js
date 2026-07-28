@@ -158,7 +158,10 @@ export function computeEligibleCastIds(state) {
   return state.cast.filter((c) => !eliminationEpisodes.has(c.id)).map((c) => c.id);
 }
 
-/** Season-end only: preseason bonus pick points + final challenge points, per manager. */
+/** Season-end only: preseason bonus pick points + final challenge points, per manager.
+ *  Preseason bonus rewards correctly *predicting* 1st/2nd/3rd (regardless of roster); final
+ *  challenge points reward whoever actually *rostered* the winner/2nd/3rd on their final
+ *  roster — same roster-ownership pattern as every other scoring event in this file. */
 export function computeSeasonEndBonusPoints(state) {
   const bonus = new Map(state.managers.map((m) => [m.id, 0]));
   if (!state.finalChallenge?.completed) return bonus;
@@ -170,6 +173,18 @@ export function computeSeasonEndBonusPoints(state) {
     if (pick.second === second) points += PRESEASON_BONUS_POINTS.second;
     if (pick.third === third) points += PRESEASON_BONUS_POINTS.third;
     bonus.set(pick.managerId, (bonus.get(pick.managerId) ?? 0) + points);
+  }
+
+  const weeks = finalizedWeeks(state);
+  const lastWeek = weeks.length ? Math.max(...weeks) : null;
+  if (lastWeek !== null) {
+    for (const [managerId, castIds] of getRosterForWeek(state, lastWeek)) {
+      let points = 0;
+      if (castIds.includes(winner)) points += FINAL_CHALLENGE_POINTS.winner;
+      if (castIds.includes(second)) points += FINAL_CHALLENGE_POINTS.second;
+      if (castIds.includes(third)) points += FINAL_CHALLENGE_POINTS.third;
+      bonus.set(managerId, (bonus.get(managerId) ?? 0) + points);
+    }
   }
   return bonus;
 }

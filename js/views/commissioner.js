@@ -1,15 +1,86 @@
 // Commissioner-only views (Milestone 3). Pure rendering — no gist.js/state.js knowledge.
 // The caller (app.js) owns data + mutations and passes them in as callbacks.
 
-import { computeRosterSize, flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete } from '../draft.js';
-import { SCORING_EVENT_POINTS, computeEliminationEpisodes } from '../scoring.js';
+import { TARGET_ROSTER_SIZE, flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete } from '../draft.js';
+import {
+  SCORING_EVENT_POINTS,
+  FINAL_CHALLENGE_POINTS,
+  computeEliminationEpisodes,
+  computeEligibleCastIds,
+  computeNextDraftOrder,
+  computeSeasonEndBonusPoints,
+} from '../scoring.js';
+import { managerName, castName } from './shared.js';
 
-function managerName(state, managerId) {
-  return state.managers.find((m) => m.id === managerId)?.name ?? managerId;
-}
+/** Shared snake-draft pick UI — used for both the preseason draft and every weekly redraft.
+ *  `idPrefix` keeps element ids distinct when both sections render on the same page. */
+function renderDraftPicker(container, state, { board, picks, eliminatedCastIds, idPrefix, headerHtml, resetLabel, onPick, onReset }) {
+  const allCastIds = state.cast.map((c) => c.id);
+  const flat = flattenDraftBoard(board);
+  const complete = isDraftComplete(board, picks, allCastIds, eliminatedCastIds);
 
-function castName(state, castId) {
-  return state.cast.find((c) => c.id === castId)?.name ?? castId;
+  const rosterList = board[0]
+    .map((managerId) => {
+      const rosterIds = getRosterForManager(picks, managerId);
+      const roster = rosterIds.map((castId) => {
+        const cast = state.cast.find((c) => c.id === castId);
+        return cast?.gender ? `${cast.name} (${cast.gender})` : castName(state, castId);
+      });
+      const short = complete && roster.length < TARGET_ROSTER_SIZE ? ` <em>(short ${TARGET_ROSTER_SIZE - roster.length} — pool ran out)</em>` : '';
+      return `<li><strong>${managerName(state, managerId)}</strong>: ${roster.length ? roster.join(', ') : '(none yet)'}${short}</li>`;
+    })
+    .join('');
+
+  let pickHtml;
+  if (complete) {
+    pickHtml = `<p><strong>Draft complete.</strong></p>`;
+  } else {
+    const nextSlot = flat[picks.length];
+    const available = getAvailableCast(allCastIds, eliminatedCastIds, picks);
+    const castOptions = available
+      .map((id) => {
+        const cast = state.cast.find((c) => c.id === id);
+        return `<option value="${id}">${cast.name} (${cast.team}${cast.gender ? ', ' + cast.gender : ''})</option>`;
+      })
+      .join('');
+
+    // Soft gender-balance hint (attempt boy/girl/boy/girl — never blocks a pick, so this is
+    // just informational). Degrades to nothing if this state predates the `gender` field.
+    let genderHintHtml = '';
+    if (state.cast[0]?.gender) {
+      const managerRoster = getRosterForManager(picks, nextSlot.managerId).map((id) => state.cast.find((c) => c.id === id)?.gender);
+      const mCount = managerRoster.filter((g) => g === 'M').length;
+      const fCount = managerRoster.filter((g) => g === 'F').length;
+      const suggestion = mCount <= fCount ? 'a guy' : 'a girl';
+      genderHintHtml = `<p style="font-size:0.85rem; color:var(--text-muted, #9a9590);">${managerName(state, nextSlot.managerId)} so far: ${mCount} guy(s), ${fCount} girl(s) &mdash; aiming for ${suggestion} next (not required)</p>`;
+    }
+
+    pickHtml = `
+      <h4>Round ${nextSlot.round + 1} of ${board.length} &mdash; ${managerName(state, nextSlot.managerId)}'s pick</h4>
+      ${genderHintHtml}
+      <div class="control-row">
+        <select id="${idPrefix}-pick-select">${castOptions}</select>
+        <button id="${idPrefix}-pick-btn">Submit Pick</button>
+      </div>
+    `;
+  }
+
+  container.innerHTML = `
+    ${headerHtml}
+    <ul>${rosterList}</ul>
+    ${pickHtml}
+    <button id="${idPrefix}-reset-btn" style="background:#7a2020;">${resetLabel}</button>
+  `;
+
+  if (!complete) {
+    container.querySelector(`#${idPrefix}-pick-btn`).addEventListener('click', () => {
+      const nextSlot = flat[picks.length];
+      const castId = container.querySelector(`#${idPrefix}-pick-select`).value;
+      onPick({ managerId: nextSlot.managerId, castId, round: nextSlot.round });
+    });
+  }
+
+  container.querySelector(`#${idPrefix}-reset-btn`).addEventListener('click', onReset);
 }
 
 export function renderPreseasonDraft(container, state, { onStartDraft, onPick, onResetDraft }) {
@@ -17,67 +88,154 @@ export function renderPreseasonDraft(container, state, { onStartDraft, onPick, o
   const activeManagers = state.managers.filter((m) => m.active);
 
   if (!draft) {
-    const rounds = computeRosterSize(state.cast.length, activeManagers.length);
     container.innerHTML = `
       <p>${activeManagers.length} active managers, ${state.cast.length} cast members
-      &rarr; ${rounds} round(s) per manager, random round-1 order, snake thereafter.</p>
+      &rarr; targeting ${TARGET_ROSTER_SIZE} per manager, random round-1 order, snake thereafter.</p>
       <button id="start-draft-btn">Start Preseason Draft</button>
     `;
     container.querySelector('#start-draft-btn').addEventListener('click', onStartDraft);
     return;
   }
 
-  const { board, picks } = draft;
-  const flat = flattenDraftBoard(board);
-  const complete = isDraftComplete(board, picks);
+  const round1Order = draft.board[0].map((managerId) => managerName(state, managerId)).join(' &rarr; ');
 
-  const round1Order = board[0].map((managerId) => managerName(state, managerId)).join(' &rarr; ');
-
-  const rosterList = board[0]
-    .map((managerId) => {
-      const m = state.managers.find((mgr) => mgr.id === managerId);
-      const roster = getRosterForManager(picks, managerId).map((castId) => state.cast.find((c) => c.id === castId)?.name ?? castId);
-      return `<li><strong>${m.name}</strong>: ${roster.length ? roster.join(', ') : '(none yet)'}</li>`;
-    })
-    .join('');
-
-  let pickHtml;
-  if (complete) {
-    pickHtml = `<p><strong>Draft complete.</strong> All rosters are set for Episode 1.</p>`;
-  } else {
-    const nextSlot = flat[picks.length];
-    const available = getAvailableCast(state.cast.map((c) => c.id), new Set(), picks);
-    const castOptions = available
-      .map((id) => {
-        const cast = state.cast.find((c) => c.id === id);
-        return `<option value="${id}">${cast.name} (${cast.team})</option>`;
-      })
-      .join('');
-    pickHtml = `
-      <h3>Round ${nextSlot.round + 1} of ${board.length} &mdash; ${managerName(state, nextSlot.managerId)}'s pick</h3>
-      <select id="pick-select">${castOptions}</select>
-      <button id="pick-btn">Submit Pick</button>
-    `;
-  }
-
-  container.innerHTML = `
-    <p><strong>Round 1 draft order (randomized):</strong> ${round1Order}</p>
-    <ul>${rosterList}</ul>
-    ${pickHtml}
-    <button id="reset-draft-btn" style="background:#7a2020;">Reset Preseason Draft</button>
-  `;
-
-  if (!complete) {
-    container.querySelector('#pick-btn').addEventListener('click', () => {
-      const nextSlot = flat[picks.length];
-      const castId = container.querySelector('#pick-select').value;
-      onPick({ managerId: nextSlot.managerId, castId, round: nextSlot.round });
-    });
-  }
-
-  container.querySelector('#reset-draft-btn').addEventListener('click', () => {
-    if (confirm('Reset the entire preseason draft? This clears every pick made so far.')) onResetDraft();
+  renderDraftPicker(container, state, {
+    board: draft.board,
+    picks: draft.picks,
+    eliminatedCastIds: new Set(),
+    idPrefix: 'preseason',
+    headerHtml: `<p><strong>Round 1 draft order (randomized):</strong> ${round1Order}</p>`,
+    resetLabel: 'Reset Preseason Draft',
+    onPick,
+    onReset: () => {
+      if (confirm('Reset the entire preseason draft? This clears every pick made so far.')) onResetDraft();
+    },
   });
+}
+
+/** The week currently being drafted: the most recent entry in drafts.weekly, if it isn't
+ *  complete yet. Mirrors getCurrentEpisode's "last item, unless it's done" pattern. */
+export function getCurrentRedraftWeek(state) {
+  const weeks = Object.keys(state.drafts.weekly)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const last = weeks[weeks.length - 1];
+  if (last === undefined) return null;
+  const draft = state.drafts.weekly[String(last)];
+  const eliminatedCastIds = new Set(computeEliminationEpisodes(state.episodes).keys());
+  return isDraftComplete(draft.board, draft.picks, state.cast.map((c) => c.id), eliminatedCastIds) ? null : last;
+}
+
+export function nextRedraftWeek(state) {
+  const weeks = Object.keys(state.drafts.weekly)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const last = weeks[weeks.length - 1];
+  return last ? last + 1 : 2;
+}
+
+/** Past weekly redrafts, most recent first, with a flag on any manager who ended up short of
+ *  TARGET_ROSTER_SIZE because the cast pool ran dry that week — surfaced here since a
+ *  completed week drops out of the active picker view the moment it's done. */
+function redraftHistoryHtml(state) {
+  const weeks = Object.keys(state.drafts.weekly)
+    .map(Number)
+    .sort((a, b) => b - a);
+  if (!weeks.length) return '';
+  return `<h4>Past Redrafts</h4><ul>${weeks
+    .map((week) => {
+      const draft = state.drafts.weekly[String(week)];
+      const rosters = draft.board[0].map((managerId) => {
+        const size = getRosterForManager(draft.picks, managerId).length;
+        const name = managerName(state, managerId);
+        return size < TARGET_ROSTER_SIZE ? `${name} (${size})` : name;
+      });
+      return `<li>Week ${week}: ${rosters.join(', ')}</li>`;
+    })
+    .join('')}</ul>`;
+}
+
+/** Warns once the surviving cast pool is thinner than the active manager count — meaning some
+ *  manager is about to get zero players this week, not just fewer than the target of 4. */
+function scarcityBannerHtml(state) {
+  if (state.meta.rosterFrozen) return '';
+  const eligibleCount = computeEligibleCastIds(state).length;
+  const activeCount = state.managers.filter((m) => m.active).length;
+  if (eligibleCount >= activeCount) return '';
+  return `<p style="color:#d1571f; font-weight:600;">&#9888; Only ${eligibleCount} cast remain for ${activeCount} active managers &mdash; someone will get zero players this week. Consider freezing rosters.</p>`;
+}
+
+function freezeControlHtml(state) {
+  return state.meta.rosterFrozen
+    ? `<p><strong>Rosters are frozen.</strong> <button id="freeze-toggle-btn" class="btn-inline">Unfreeze Rosters</button></p>`
+    : `<button id="freeze-toggle-btn" class="btn-inline" style="background:#7a2020;">Freeze Rosters</button>`;
+}
+
+function attachFreezeListener(container, state, onToggleFreeze) {
+  container.querySelector('#freeze-toggle-btn')?.addEventListener('click', () => {
+    const willFreeze = !state.meta.rosterFrozen;
+    if (willFreeze && !confirm('Freeze rosters for the rest of the season? No more weekly redrafts will happen after this — every manager keeps their current roster through the finale.')) {
+      return;
+    }
+    onToggleFreeze();
+  });
+}
+
+export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onToggleFreeze }) {
+  const currentWeek = getCurrentRedraftWeek(state);
+  const statusHtml = `${scarcityBannerHtml(state)}${freezeControlHtml(state)}`;
+
+  if (currentWeek === null) {
+    const week = nextRedraftWeek(state);
+
+    if (state.meta.rosterFrozen) {
+      container.innerHTML = `${statusHtml}<p><strong>No further redrafts this season.</strong></p>${redraftHistoryHtml(state)}`;
+      attachFreezeListener(container, state, onToggleFreeze);
+      return;
+    }
+
+    const prevEpisode = state.episodes.find((e) => e.episodeNumber === week - 1);
+    if (!prevEpisode || !prevEpisode.finalized) {
+      container.innerHTML = `${statusHtml}<p>Waiting on Episode ${week - 1} to be finalized before the Week ${week} redraft can start.</p>${redraftHistoryHtml(state)}`;
+      attachFreezeListener(container, state, onToggleFreeze);
+      return;
+    }
+
+    const baseOrder = computeNextDraftOrder(state);
+    const eligibleCastIds = computeEligibleCastIds(state);
+    const activeManagers = state.managers.filter((m) => m.active);
+    const orderPreview = baseOrder.map((id) => managerName(state, id)).join(' &rarr; ');
+
+    container.innerHTML = `
+      ${statusHtml}
+      <p><strong>Week ${week} draft order (reverse standings, same order every round):</strong> ${orderPreview}</p>
+      <p>${eligibleCastIds.length} cast remaining, ${activeManagers.length} active managers
+      &rarr; targeting ${TARGET_ROSTER_SIZE} per manager (whoever's picking when the pool runs out gets fewer).</p>
+      <button id="start-redraft-btn">Start Week ${week} Redraft</button>
+      ${redraftHistoryHtml(state)}
+    `;
+    container.querySelector('#start-redraft-btn').addEventListener('click', onStartRedraft);
+    attachFreezeListener(container, state, onToggleFreeze);
+    return;
+  }
+
+  const draft = state.drafts.weekly[String(currentWeek)];
+  const eliminatedCastIds = new Set(computeEliminationEpisodes(state.episodes).keys());
+  const round1Order = draft.board[0].map((managerId) => managerName(state, managerId)).join(' &rarr; ');
+
+  renderDraftPicker(container, state, {
+    board: draft.board,
+    picks: draft.picks,
+    eliminatedCastIds,
+    idPrefix: 'redraft',
+    headerHtml: `${statusHtml}<h4>Week ${currentWeek} Redraft</h4><p><strong>Draft order (reverse standings, same order every round):</strong> ${round1Order}</p>`,
+    resetLabel: `Reset Week ${currentWeek} Redraft`,
+    onPick,
+    onReset: () => {
+      if (confirm(`Reset the Week ${currentWeek} redraft? This clears every pick made so far.`)) onResetRedraft();
+    },
+  });
+  attachFreezeListener(container, state, onToggleFreeze);
 }
 
 /** The episode currently being entered: the last one in the array, if it isn't finalized yet. */
@@ -89,6 +247,21 @@ export function getCurrentEpisode(state) {
 export function nextEpisodeNumber(state) {
   const last = state.episodes[state.episodes.length - 1];
   return last ? last.episodeNumber + 1 : 1;
+}
+
+/** Episode N can't start until that week's roster is actually set: the preseason draft for
+ *  Episode 1, or that week's redraft for Episode 2+ — unless rosters are frozen, in which case
+ *  there's no more redrafting for the rest of the season and episodes just keep going. */
+export function rostersReadyForEpisode(state, episodeNumber) {
+  const allCastIds = state.cast.map((c) => c.id);
+  if (episodeNumber === 1) {
+    const draft = state.drafts.preseason;
+    return !!draft && isDraftComplete(draft.board, draft.picks, allCastIds, new Set());
+  }
+  if (state.meta.rosterFrozen) return true;
+  const draft = state.drafts.weekly[String(episodeNumber)];
+  const eliminatedCastIds = new Set(computeEliminationEpisodes(state.episodes).keys());
+  return !!draft && isDraftComplete(draft.board, draft.picks, allCastIds, eliminatedCastIds);
 }
 
 function finalizedEpisodesHtml(state) {
@@ -120,14 +293,22 @@ export function renderEpisodeEntry(
   if (!episode) {
     const n = nextEpisodeNumber(state);
     const last = state.episodes[state.episodes.length - 1];
+    const ready = rostersReadyForEpisode(state, n);
+    const startButtonHtml = ready
+      ? `<button id="start-episode-btn">Start Episode ${n}</button>`
+      : `<p style="color:var(--accent-burnt-orange, #d1571f);">Episode ${n} can't start yet &mdash; ${
+          n === 1 ? 'finish the preseason draft' : `finish the Week ${n} redraft`
+        } first.</p>`;
     container.innerHTML = `
       <p>Ready to start Episode ${n}.</p>
-      <button id="start-episode-btn">Start Episode ${n}</button>
+      ${startButtonHtml}
       ${last ? `<button id="unfinalize-btn" style="background:#7a2020;">Reopen Episode ${last.episodeNumber} for Corrections</button>` : ''}
       <h4>Finalized Episodes</h4>
       ${finalizedEpisodesHtml(state)}
     `;
-    container.querySelector('#start-episode-btn').addEventListener('click', () => onStartEpisode(n));
+    if (ready) {
+      container.querySelector('#start-episode-btn').addEventListener('click', () => onStartEpisode(n));
+    }
     if (last) {
       container.querySelector('#unfinalize-btn').addEventListener('click', () => {
         if (
@@ -187,19 +368,23 @@ export function renderEpisodeEntry(
 
     <h4>Scoring Events</h4>
     <ul>${eventsList}</ul>
-    <select id="event-cast-select">${castOptions}</select>
-    <select id="event-type-select">${eventTypeOptions}</select>
-    <input id="event-count-input" type="number" min="1" value="1" placeholder="count" />
-    <button id="add-event-btn">Add Event</button>
+    <div class="control-row">
+      <select id="event-cast-select">${castOptions}</select>
+      <select id="event-type-select">${eventTypeOptions}</select>
+      <input id="event-count-input" type="number" min="1" value="1" placeholder="count" />
+      <button id="add-event-btn">Add Event</button>
+    </div>
 
     <h4>Confessional Minutes</h4>
     <ul>${confessionalList}</ul>
-    <select id="confessional-cast-select">${castOptions}</select>
-    <input id="confessional-minutes-input" type="number" min="0" step="0.5" placeholder="minutes" />
-    <button id="set-confessional-btn">Set Minutes</button>
+    <div class="control-row">
+      <select id="confessional-cast-select">${castOptions}</select>
+      <input id="confessional-minutes-input" type="number" min="0" step="0.5" placeholder="minutes" />
+      <button id="set-confessional-btn">Set Minutes</button>
+    </div>
 
     <h4>Eliminations This Episode</h4>
-    <div id="episode-entry-eliminations">${eliminationCheckboxes}</div>
+    <div id="episode-entry-eliminations" class="checkbox-grid">${eliminationCheckboxes}</div>
     <button id="save-eliminations-btn">Save Eliminations</button>
     <p><strong>Saved:</strong> ${savedEliminationsText}</p>
 
@@ -236,6 +421,59 @@ export function renderEpisodeEntry(
   container.querySelector('#finalize-episode-btn').addEventListener('click', () => {
     if (confirm(`Finalize Episode ${episode.episodeNumber}? This locks its scoring into the leaderboard.`)) {
       onFinalizeEpisode();
+    }
+  });
+}
+
+export function renderFinalChallengeEntry(container, state, { onSetFinalChallenge, onResetFinalChallenge }) {
+  const fc = state.finalChallenge ?? { completed: false, winner: null, second: null, third: null };
+
+  if (fc.completed) {
+    const bonusPoints = computeSeasonEndBonusPoints(state);
+    const breakdown = state.managers
+      .filter((m) => m.active)
+      .map((m) => `<li>${m.name}: ${bonusPoints.get(m.id) ?? 0} bonus pt(s)</li>`)
+      .join('');
+    container.innerHTML = `
+      <p><strong>Winner:</strong> ${castName(state, fc.winner)} (+${FINAL_CHALLENGE_POINTS.winner} to whoever rostered them)</p>
+      <p><strong>2nd:</strong> ${castName(state, fc.second)} (+${FINAL_CHALLENGE_POINTS.second})</p>
+      <p><strong>3rd:</strong> ${castName(state, fc.third)} (+${FINAL_CHALLENGE_POINTS.third})</p>
+      <h4>Season-End Bonus Points (final challenge + preseason predictions)</h4>
+      <ul>${breakdown}</ul>
+      <button id="reset-final-challenge-btn" style="background:#7a2020;">Reset Final Challenge Results</button>
+    `;
+    container.querySelector('#reset-final-challenge-btn').addEventListener('click', () => {
+      if (confirm('Reset the final challenge results? This removes final-challenge bonus points from the leaderboard until re-entered.')) {
+        onResetFinalChallenge();
+      }
+    });
+    return;
+  }
+
+  const eligibleCast = state.cast.filter((c) => !computeEliminationEpisodes(state.episodes).has(c.id));
+  const castOptions = eligibleCast.map((c) => `<option value="${c.id}">${c.name} (${c.team})</option>`).join('');
+
+  container.innerHTML = `
+    <p>Enter the final challenge's top 3 finishers (from remaining cast). Points go to whoever
+    rosters them on their final roster: winner +${FINAL_CHALLENGE_POINTS.winner}, 2nd +${FINAL_CHALLENGE_POINTS.second}, 3rd +${FINAL_CHALLENGE_POINTS.third}.</p>
+    <div class="control-row">
+      <select id="fc-winner-select">${castOptions}</select>
+      <select id="fc-second-select">${castOptions}</select>
+      <select id="fc-third-select">${castOptions}</select>
+    </div>
+    <button id="save-final-challenge-btn">Save Final Challenge Results</button>
+  `;
+
+  container.querySelector('#save-final-challenge-btn').addEventListener('click', () => {
+    const winner = container.querySelector('#fc-winner-select').value;
+    const second = container.querySelector('#fc-second-select').value;
+    const third = container.querySelector('#fc-third-select').value;
+    if (new Set([winner, second, third]).size < 3) {
+      alert('Winner, 2nd, and 3rd must be three different cast members.');
+      return;
+    }
+    if (confirm('Save final challenge results? This locks in season-end bonus points.')) {
+      onSetFinalChallenge({ winner, second, third });
     }
   });
 }
