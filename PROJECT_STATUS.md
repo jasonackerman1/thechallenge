@@ -4,6 +4,16 @@ Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture p
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
+**Git status: Milestone 4 (Safe Pick, Cast Browser, Preseason Bonus Pick) built since the last
+commit — not yet committed/pushed.** Prior work (through My Roster) is committed and pushed to
+`origin/main` (commits `73842a5`, `b82b81c`, on top of the initial `73d18da`).
+
+**Live test-season state (Jay's real Gist):** preseason draft complete, Episodes 1-3 scored and
+finalized (Episode 3 included an intentional elimination of a couple of managers' safe picks, to
+confirm the leaderboard correctly zeroed their safe-pick points), Weeks 2-3 redrafted (Week 3
+fully drafted by Jay switching through manager identities and picking for each one in turn via
+**My Roster**, not the commissioner UI), safe picks submitted for all 6 managers in Week 3.
+
 ## Done
 
 **Milestone 1 (data layer) + Milestone 2 (draft/scoring engines)** — built and validated:
@@ -66,14 +76,51 @@ redraft-twist toggle (see "Not done yet"). All in `js/views/commissioner.js` unl
   - New shared module `js/views/shared.js` (`managerName`/`castName`/`castNameWithGender`) —
     pulled out of `commissioner.js` once `player.js` needed the same helpers, matching the plan's
     original file-structure spec.
-  - Verified live: all 6 phase branches (no draft / week-1 read-only / waiting / not-your-turn /
-    your-turn / frozen) render correctly, including that a non-active manager correctly sees no
-    pick form at all.
-- Not yet built: Safe Pick, Preseason Bonus Pick, Cast Browser.
+  - Verified live via automated Playwright checks (all 6 phase branches render correctly,
+    including that a non-active manager sees no pick form at all), **and then verified for real
+    by Jay**: he drafted a full round of Week 3 by switching through each manager's identity via
+    the "Switch" link and picking for each one in turn — confirmed the turn-gating actually holds
+    up in practice, not just in a scripted test.
+- **Safe Pick — built 2026-07-28** (`renderSafePick` in `js/views/player.js`): each manager picks
+  one cast member per week they think survives that episode, +`SAFE_PICK_POINTS` (10) if right.
+  Each cast member usable only once per manager all season (`getUsedSafePicks`), eliminated cast
+  excluded. Locking rule: reuses `nextEpisodeNumber(state)` unchanged — it already returns "next
+  week" the moment the *current* episode is started (not just finalized), which is exactly the
+  right fairness cutoff (no picking once results might already be known), so no new helper was
+  needed. Shows past weeks' picks + points earned; lets you change your current week's pick before
+  it locks (a "Clear" button + re-submit). **Bug found and fixed during live verification, before
+  reporting done:** the current week's own existing pick was being counted as "already used
+  this season" against itself, so it silently vanished from its own "change pick" dropdown and
+  the intended pre-selected value never actually applied — fixed by excluding the current week's
+  own pick from that exclusion set. Confirmed fixed via a direct `inputValue()` check on the
+  select element, not just eyeballing the rendered HTML. **Confirmed live by Jay**: safe-picked
+  for all 6 managers by switching identities, then scored an episode with an intentional
+  elimination of a couple of the picked cast members — leaderboard correctly showed 0 for those
+  managers' safe-pick points.
+- **Cast Browser — built 2026-07-28** (`renderCastBrowser` in `js/views/player.js`, read-only, no
+  identity needed): all 24 cast grouped by team, status (Active / Eliminated + episode number),
+  and season point total. New `computeCastSeasonPoints(state)` in `js/scoring.js` — didn't exist
+  before, since every other scoring function is manager-centric (roster points, safe-pick
+  points); this one sums a cast member's own points across all finalized episodes independent of
+  who rostered them, including the Survived-the-Week bonus whenever they were on *any* roster
+  that week. Verified live: daily-challenge winner correctly shows even split of the base event
+  points + survive bonus (10 = 5+5), a same-episode eliminated cast member correctly shows 0 (no
+  survive bonus that episode, matches the existing "eliminated this episode still keeps points
+  earned earlier in it" rule), everyone else shows the flat 5-point survive bonus.
+- **Preseason Bonus Pick — built 2026-07-28. Milestone 4 is now fully complete.**
+  (`renderPreseasonBonusPick`/`isPreseasonBonusPickLocked` in `js/views/player.js`): one-time
+  1st/2nd/3rd season-finish prediction, +30/+20/+10 if correct. Locks the moment Episode 1 is
+  finalized (`isPreseasonBonusPickLocked` — checked at both the UI-render level and again inside
+  the actual mutation before writing, same defense-in-depth pattern as every other locking rule
+  in this app). Once locked, shows the manager's locked-in pick read-only, with a "&#10003;
+  correct" marker per prediction once the final challenge results are in. Verified live across 5
+  states: unlocked/no-pick, unlocked/existing-pick (pre-filled, "Change Pick"), locked/no-results,
+  locked/with-results (confirmed the checkmark shows only for the actually-correct prediction,
+  not the misses), locked/no-pick-submitted. Note: couldn't test this specific flow against Jay's
+  own live Gist (already well past Episode 1), so it was verified entirely with crafted test
+  states instead — same rigor, just not on his real data for this one piece.
 
 ## Not done yet
-
-- **Milestone 4 remainder:** Safe Pick, Preseason Bonus Pick, Cast Browser.
 - **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
   `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
   redraft feature from the family, so building the toggle now would be inert.

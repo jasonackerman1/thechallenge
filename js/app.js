@@ -5,7 +5,7 @@
 import { loadCredentials, saveCredentials, loadCachedState, saveCachedState, loadPlayerIdentity, savePlayerIdentity } from './state.js';
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
-import { computeLeaderboard, computeNextDraftOrder, computeEliminationEpisodes } from './scoring.js';
+import { computeLeaderboard, computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks } from './scoring.js';
 import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
 import {
   renderPreseasonDraft,
@@ -18,7 +18,16 @@ import {
   getCurrentRedraftWeek,
   nextRedraftWeek,
 } from './views/commissioner.js';
-import { renderIdentityModal, renderIdentityIndicator, renderLeaderboard, renderMyRoster } from './views/player.js';
+import {
+  renderIdentityModal,
+  renderIdentityIndicator,
+  renderLeaderboard,
+  renderMyRoster,
+  renderSafePick,
+  renderPreseasonBonusPick,
+  isPreseasonBonusPickLocked,
+  renderCastBrowser,
+} from './views/player.js';
 
 const els = {
   setupForm: document.getElementById('setup-form'),
@@ -40,6 +49,9 @@ const els = {
   identityModal: document.getElementById('identity-modal'),
   leaderboardContainer: document.getElementById('leaderboard-container'),
   myRosterContainer: document.getElementById('my-roster-container'),
+  safePickContainer: document.getElementById('safe-pick-container'),
+  bonusPickContainer: document.getElementById('bonus-pick-container'),
+  castBrowserContainer: document.getElementById('cast-browser-container'),
 };
 
 let currentState = null;
@@ -102,6 +114,59 @@ function renderPlayerView() {
         return fresh;
       }),
   });
+  renderSafePick(els.safePickContainer, currentState, currentManagerId, {
+    onSubmitSafePick: (castId) =>
+      runMutation((fresh) => {
+        const managerId = loadPlayerIdentity();
+        const week = nextEpisodeNumber(fresh);
+        const usedCastIds = getUsedSafePicks(fresh, managerId);
+        const eliminatedCastIds = new Set(computeEliminationEpisodes(fresh.episodes).keys());
+        if (eliminatedCastIds.has(castId)) throw new Error('That cast member has already been eliminated.');
+        const weekKey = String(week);
+        const weekPicks = (fresh.safePicks[weekKey] ??= []);
+        const existing = weekPicks.find((p) => p.managerId === managerId);
+        if (usedCastIds.has(castId) && existing?.castId !== castId) {
+          throw new Error("You've already used that cast member for a safe pick this season.");
+        }
+        if (existing) {
+          existing.castId = castId;
+          existing.submittedAt = new Date().toISOString();
+        } else {
+          weekPicks.push({ managerId, castId, submittedAt: new Date().toISOString() });
+        }
+        return fresh;
+      }),
+    onClearSafePick: () =>
+      runMutation((fresh) => {
+        const managerId = loadPlayerIdentity();
+        const week = nextEpisodeNumber(fresh);
+        const weekKey = String(week);
+        if (fresh.safePicks[weekKey]) {
+          fresh.safePicks[weekKey] = fresh.safePicks[weekKey].filter((p) => p.managerId !== managerId);
+        }
+        return fresh;
+      }),
+  });
+  renderPreseasonBonusPick(els.bonusPickContainer, currentState, currentManagerId, {
+    onSubmit: ({ first, second, third }) =>
+      runMutation((fresh) => {
+        const managerId = loadPlayerIdentity();
+        if (isPreseasonBonusPickLocked(fresh)) {
+          throw new Error('Preseason bonus picks are locked — Episode 1 has already been finalized.');
+        }
+        const existing = fresh.preseasonPicks.find((p) => p.managerId === managerId);
+        if (existing) {
+          existing.first = first;
+          existing.second = second;
+          existing.third = third;
+          existing.submittedAt = new Date().toISOString();
+        } else {
+          fresh.preseasonPicks.push({ managerId, first, second, third, submittedAt: new Date().toISOString() });
+        }
+        return fresh;
+      }),
+  });
+  renderCastBrowser(els.castBrowserContainer, currentState);
   if (!currentManagerId) openIdentityModal();
 }
 

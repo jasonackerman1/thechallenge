@@ -2,10 +2,18 @@
 // pattern as commissioner.js. Player actions have no password gate (unlike commissioner mode) —
 // the only "identity" is a per-device manager selection, a convenience, not real auth.
 
-import { computeLeaderboard, computeEliminationEpisodes } from '../scoring.js';
+import {
+  computeLeaderboard,
+  computeEliminationEpisodes,
+  computeSafePickPointsForManagerWeek,
+  computeCastSeasonPoints,
+  getUsedSafePicks,
+  SAFE_PICK_POINTS,
+  PRESEASON_BONUS_POINTS,
+} from '../scoring.js';
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, TARGET_ROSTER_SIZE } from '../draft.js';
-import { getCurrentRedraftWeek, nextRedraftWeek } from './commissioner.js';
-import { managerName, castNameWithGender } from './shared.js';
+import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber } from './commissioner.js';
+import { managerName, castName, castNameWithGender } from './shared.js';
 
 /** App-wide "who's using this device" modal — same first-open pattern as the location picker
  *  used elsewhere (auto-opens once if no identity is set, reopenable any time via the small
@@ -175,4 +183,158 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
       <p>Your current roster: ${rosterListHtml(state, roster)}</p>
     `;
   }
+}
+
+function safePickHistoryHtml(state, managerId, uptoWeek) {
+  const weeks = Object.keys(state.safePicks ?? {})
+    .map(Number)
+    .filter((w) => w < uptoWeek)
+    .sort((a, b) => a - b);
+  const rows = weeks
+    .map((w) => {
+      const pick = state.safePicks[String(w)].find((p) => p.managerId === managerId);
+      if (!pick) return null;
+      const points = computeSafePickPointsForManagerWeek(state, managerId, w);
+      return `<li>Week ${w}: ${castName(state, pick.castId)} &mdash; ${points} pt(s)</li>`;
+    })
+    .filter(Boolean);
+  return rows.length ? `<ul>${rows.join('')}</ul>` : '<p>(none yet)</p>';
+}
+
+export function renderSafePick(container, state, currentManagerId, { onSubmitSafePick, onClearSafePick }) {
+  if (!currentManagerId) {
+    container.innerHTML = `<p>Pick your identity above to make a safe pick.</p>`;
+    return;
+  }
+
+  const week = nextEpisodeNumber(state);
+  const usedCastIds = getUsedSafePicks(state, currentManagerId);
+  const eliminatedCastIds = new Set(computeEliminationEpisodes(state.episodes).keys());
+  const existingPick = (state.safePicks?.[String(week)] ?? []).find((p) => p.managerId === currentManagerId);
+  // This week's own pick shouldn't count as "already used" against itself, or it'd vanish from
+  // its own dropdown and the "selected" pre-fill below would never actually apply to anything.
+  const available = state.cast.filter(
+    (c) => (!usedCastIds.has(c.id) || c.id === existingPick?.castId) && !eliminatedCastIds.has(c.id)
+  );
+
+  const castOptions = available
+    .map((c) => `<option value="${c.id}" ${existingPick?.castId === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
+    .join('');
+
+  container.innerHTML = `
+    <p>Pick one cast member you think survives Week ${week}'s episode &mdash; +${SAFE_PICK_POINTS} points if they do.
+    Each cast member can only be used once all season, and this locks the moment the commissioner starts entering Week ${week}'s results.</p>
+    ${existingPick ? `<p><strong>Current pick:</strong> ${castName(state, existingPick.castId)} <button id="safe-pick-clear-btn" class="btn-inline" style="background:#7a2020;">Clear</button></p>` : ''}
+    <div class="control-row">
+      <select id="safe-pick-select">${castOptions}</select>
+      <button id="safe-pick-submit-btn">${existingPick ? 'Change Pick' : 'Submit Safe Pick'}</button>
+    </div>
+    <h4>Past Safe Picks</h4>
+    ${safePickHistoryHtml(state, currentManagerId, week)}
+  `;
+
+  container.querySelector('#safe-pick-submit-btn').addEventListener('click', () => {
+    onSubmitSafePick(container.querySelector('#safe-pick-select').value);
+  });
+  container.querySelector('#safe-pick-clear-btn')?.addEventListener('click', onClearSafePick);
+}
+
+/** Locks the moment Episode 1 is finalized — a one-time prediction, not a weekly action. */
+export function isPreseasonBonusPickLocked(state) {
+  return state.episodes.some((e) => e.episodeNumber === 1 && e.finalized);
+}
+
+export function renderPreseasonBonusPick(container, state, currentManagerId, { onSubmit }) {
+  if (!currentManagerId) {
+    container.innerHTML = `<p>Pick your identity above to make your preseason bonus pick.</p>`;
+    return;
+  }
+
+  const existingPick = (state.preseasonPicks ?? []).find((p) => p.managerId === currentManagerId);
+  const locked = isPreseasonBonusPickLocked(state);
+
+  if (locked) {
+    if (!existingPick) {
+      container.innerHTML = `<p>Preseason bonus picks are locked (Episode 1 is finalized). You didn't submit one.</p>`;
+      return;
+    }
+    const resultsKnown = state.finalChallenge?.completed;
+    const resultLine = (label, pickId, actualId) => {
+      if (!resultsKnown) return `${label}: ${castName(state, pickId)}`;
+      const hit = pickId === actualId;
+      return `${label}: ${castName(state, pickId)} ${hit ? '&#10003; correct' : ''}`;
+    };
+    container.innerHTML = `
+      <p><strong>Your preseason bonus pick (locked):</strong></p>
+      <ul>
+        <li>${resultLine('1st', existingPick.first, state.finalChallenge?.winner)}</li>
+        <li>${resultLine('2nd', existingPick.second, state.finalChallenge?.second)}</li>
+        <li>${resultLine('3rd', existingPick.third, state.finalChallenge?.third)}</li>
+      </ul>
+    `;
+    return;
+  }
+
+  const castOptions = (selected) =>
+    state.cast
+      .map((c) => `<option value="${c.id}" ${selected === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
+      .join('');
+
+  container.innerHTML = `
+    <p>Predict the season's top 3 finishers. Points if you're right: 1st +${PRESEASON_BONUS_POINTS.first},
+    2nd +${PRESEASON_BONUS_POINTS.second}, 3rd +${PRESEASON_BONUS_POINTS.third}. Locks the moment Episode 1 is finalized.</p>
+    <div class="control-row">
+      <select id="bonus-first-select">${castOptions(existingPick?.first)}</select>
+      <select id="bonus-second-select">${castOptions(existingPick?.second)}</select>
+      <select id="bonus-third-select">${castOptions(existingPick?.third)}</select>
+    </div>
+    <button id="bonus-submit-btn">${existingPick ? 'Change Pick' : 'Submit Bonus Pick'}</button>
+  `;
+
+  container.querySelector('#bonus-submit-btn').addEventListener('click', () => {
+    const first = container.querySelector('#bonus-first-select').value;
+    const second = container.querySelector('#bonus-second-select').value;
+    const third = container.querySelector('#bonus-third-select').value;
+    if (new Set([first, second, third]).size < 3) {
+      alert('1st, 2nd, and 3rd must be three different cast members.');
+      return;
+    }
+    onSubmit({ first, second, third });
+  });
+}
+
+export function renderCastBrowser(container, state) {
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  const seasonPoints = computeCastSeasonPoints(state);
+  const teams = [...new Set(state.cast.map((c) => c.team))];
+
+  const sectionsHtml = teams
+    .map((team) => {
+      const rows = state.cast
+        .filter((c) => c.team === team)
+        .map((c) => {
+          const eliminatedAt = eliminationEpisodes.get(c.id);
+          const status = eliminatedAt !== undefined ? `Eliminated (Ep ${eliminatedAt})` : 'Active';
+          return `
+            <tr${eliminatedAt !== undefined ? ' style="color:var(--text-muted);"' : ''}>
+              <td style="text-align:left;">${castNameWithGender(state, c.id)}</td>
+              <td style="text-align:left;">${status}</td>
+              <td>${seasonPoints.get(c.id) ?? 0}</td>
+            </tr>
+          `;
+        })
+        .join('');
+      return `
+        <h4>${team}</h4>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th style="text-align:left;">Cast</th><th style="text-align:left;">Status</th><th>Season Pts</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      `;
+    })
+    .join('');
+
+  container.innerHTML = sectionsHtml;
 }

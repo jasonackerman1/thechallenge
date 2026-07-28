@@ -158,6 +158,22 @@ export function computeEligibleCastIds(state) {
   return state.cast.filter((c) => !eliminationEpisodes.has(c.id)).map((c) => c.id);
 }
 
+/** Total season points per cast member, summed across all finalized episodes — not tied to any
+ *  one manager, just a per-cast-member summary (for the Cast Browser). Includes the
+ *  Survived-the-Week bonus whenever a cast member was on ANY manager's roster that week. */
+export function computeCastSeasonPoints(state) {
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  const points = new Map(state.cast.map((c) => [c.id, 0]));
+  for (const week of finalizedWeeks(state)) {
+    const episode = state.episodes.find((e) => e.episodeNumber === week);
+    const rosteredThisWeek = allRosteredCastIdsForWeek(state, week);
+    for (const cast of state.cast) {
+      points.set(cast.id, points.get(cast.id) + computeCastPointsForEpisode(episode, cast.id, rosteredThisWeek.has(cast.id), eliminationEpisodes));
+    }
+  }
+  return points;
+}
+
 /** Season-end only: preseason bonus pick points + final challenge points, per manager.
  *  Preseason bonus rewards correctly *predicting* 1st/2nd/3rd (regardless of roster); final
  *  challenge points reward whoever actually *rostered* the winner/2nd/3rd on their final
