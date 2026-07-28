@@ -4,9 +4,9 @@ Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture p
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**Git status: Milestone 4 (Safe Pick, Cast Browser, Preseason Bonus Pick) built since the last
-commit — not yet committed/pushed.** Prior work (through My Roster) is committed and pushed to
-`origin/main` (commits `73842a5`, `b82b81c`, on top of the initial `73d18da`).
+**Git status: clean and pushed.** Milestone 4 is fully committed and pushed to `origin/main`
+(commit `e85f112` — Safe Pick, Cast Browser, Preseason Bonus Pick — on top of `73842a5`,
+`b82b81c`, `73d18da`). No local uncommitted changes as of this checkpoint.
 
 **Live test-season state (Jay's real Gist):** preseason draft complete, Episodes 1-3 scored and
 finalized (Episode 3 included an intentional elimination of a couple of managers' safe picks, to
@@ -44,7 +44,7 @@ redraft-twist toggle (see "Not done yet"). All in `js/views/commissioner.js` unl
 - Whole commissioner UI is mobile-first + responsive (single column on phone; rows go
   horizontal and the elimination checklist goes 2/3-column at tablet/desktop widths).
 
-**Milestone 4 (player views) — in progress:**
+**Milestone 4 (player views) — complete:**
 - Player identity: first-open modal ("Who's using this device?"), remembered per-device in
   `localStorage`, persistent "Playing as X — Switch" indicator to reopen it. `js/views/player.js`.
 - Leaderboard: rank, grand total, this-week roster/safe-pick points, bonus points, current
