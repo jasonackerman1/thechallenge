@@ -1,12 +1,13 @@
-# Project Status — updated 2026-07-28
+# Project Status — updated 2026-07-29
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**Git status: clean and pushed.** Milestone 4 is fully committed and pushed to `origin/main`
-(commit `e85f112` — Safe Pick, Cast Browser, Preseason Bonus Pick — on top of `73842a5`,
-`b82b81c`, `73d18da`). No local uncommitted changes as of this checkpoint.
+**Git status: clean and pushed.** Commit `9dbc874` — PWA shell (manifest, service worker, real
+logo, generated icons) + identity/admin UI hardening — on top of `0bbb209` (readability refactor)
+and the Milestone 4 commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local
+uncommitted changes as of this checkpoint.
 
 **Live test-season state (Jay's real Gist):** preseason draft complete, Episodes 1-3 scored and
 finalized (Episode 3 included an intentional elimination of a couple of managers' safe picks, to
@@ -202,23 +203,73 @@ cards at a glance. Responsive: 2 columns phone, 3 tablet, 4 desktop.
 - All three new states (hit/miss/eliminated-unused) plus the chosen-pick outline verified
   together in one live screenshot before calling this done, not just checked in isolation.
 
+**PWA shell — built and verified 2026-07-29 (commit `9dbc874`):**
+- Jay supplied the real official show logo (`images/logo.jpg`, "THE CHALLENGE CUTTHROAT"
+  chrome/neon wordmark, 669×267) after being asked to confirm an icon concept first — this
+  replaced the plan to build an invented icon from scratch. The wordmark is now the in-app header
+  (`<h1><img id="site-logo" ...></h1>`), same "use the real asset directly" pattern as Storm's
+  wordmark header.
+- **App icons generated from the logo's own sampled colors, not guessed or hand-picked:**
+  `images/logo.jpg` is a wide wordmark (2.5:1) that can't crop into a legible square icon (tried —
+  any square crop just chops the text mid-letter and reads as broken, not branded, the exact
+  aspect-ratio problem Storm hit with its own wordmark). Instead, median-cut color quantization on
+  the actual JPEG pulled out its real palette (chrome silver `#b2bbc8`/`#88869a`, neon red-orange
+  `#c03d2b`, dark maroon shadow `#441f23`, cyan glow `#86c0db`), and a `"C42"` monogram (Anton
+  font, chrome-to-red vertical gradient text, navy-to-maroon background, thin cyan glow bar
+  echoing the logo's own underline) was built in Python/PIL using those exact values. Icon concept
+  was proposed to Jay first via `AskUserQuestion` before building (he redirected to "use the real
+  logo" mid-question, which led to this approach instead of any of the original options).
+- Files: `manifest.webmanifest` (name/icons/theme-color, `display: standalone`), `icons/` (192 +
+  512 in both `any` and `maskable` purpose, plus a 180px `apple-touch-icon.png`), `sw.js`.
+- **`sw.js` caching strategy — same split as Storm's service worker:** HTML/JS
+  (`NETWORK_FIRST_FILES`) always hit the network first since this app is under active development
+  and must reflect a fresh deploy immediately; fonts/images/icons (`CACHE_FIRST_FILES`) are
+  cache-first for offline reliability. Gist API calls (`api.github.com`, cross-origin) and all
+  non-GET requests are explicitly excluded from the fetch handler — this app's live sync protocol
+  must never be intercepted by the cache.
+- **Verified live, not just read through:** installed Playwright + headless Chromium (same method
+  as the earlier PDF.js debugging in the Accelerate Playbook project), confirmed manifest is valid
+  JSON, all assets 200, service worker reaches `active` state, zero console errors, and — the
+  actual point of a service worker — a full page reload with the network cut off still renders
+  the shell and logo correctly from cache.
+
+**Identity/admin UI hardened — 2026-07-29, direct response to Jay's reaction to the PWA-shell
+screenshot:**
+- **Logo resized and centered** (was accidentally left as an oversized full-width image; now
+  200px mobile → 280px desktop, centered via `h1 { text-align:center }` + `inline-block` sizing).
+- **"Playing as X" text removed entirely** — Jay pointed out the leaderboard already shows this
+  via the highlighted current-manager row (`.lb-row.you`), so it was redundant.
+- **Identity switch is now a fully hidden triple-tap/triple-click on the logo itself** (within an
+  800ms window), replacing the small "not you?" text link from earlier the same day, which was
+  itself a step down from the original full-size "Switch" button — this was Jay's explicit ask to
+  hide it *more*, not just make it smaller. No visual affordance at all (no cursor change, no
+  hover state) — deliberately a secret gesture, not a discoverable control. Bound once per logo
+  element via a `dataset.switchBound` flag so the listener doesn't stack across re-renders (this
+  app re-renders the player view on every state update). Verified directly: 2 taps don't trigger
+  it, the 3rd does exactly once even when the render function is called twice in a row (simulating
+  a re-render), and the counter correctly resets after the timeout window.
+- **Seed Initial Data / Force Reload moved from the public pre-login area into the password-gated
+  Commissioner panel.** Real risk found while reviewing this, not just tidiness: "Seed Initial
+  Data" unconditionally overwrites the entire Gist with a blank season (only gated by a fresh
+  password *prompt*, not a check for existing data) and was sitting in the open, reachable by
+  anyone on any device before commissioner login — with a live season in progress, one accidental
+  tap would have wiped everything. Force Reload is harmless (read-only re-fetch) but was moved
+  alongside it since it's equally a power-user/debug action, not something the family needs. A
+  warning line was added next to the Seed button as a reminder of what it actually does.
+
 ## Not done yet
 - **Commissioner views are still visually plain** — round 3 covered every player-facing section
   Jay flagged; Commissioner mode (password-gated, only Jay uses it) hasn't had the same design
   pass. Worth asking whether that even needs the same treatment, or whether "boring but
   functional" is fine there since it's power-user tooling, not the family-facing experience.
-- **PWA mechanics**: manifest.json, service worker, real app icons (the character-art style
-  suggests real icon possibilities beyond a generic placeholder) — not started.
 - **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
   `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
   redraft feature from the family, so building the toggle now would be inert.
 - Milestone 6 (hardening/deploy) still pending.
-- **Known open item for the Milestone 5 design pass:** the "Switch" identity link is currently a
-  plain always-visible button — anyone can tap it and act as another manager (submit their
-  redraft picks, safe pick, etc.). Low risk in a trusted-family context, but Jay flagged it
-  explicitly and wants it addressed once there's a real design pass — likely burying it in a
-  settings/profile area instead of a bare button. Don't lose track of this — now's the moment to
-  actually build it, given a design pass is literally in progress.
+- **Not yet tested on a real phone as an actually-installed PWA** (add-to-home-screen, standalone
+  launch, icon appearance on an actual device) — verification so far is headless-Chromium-only
+  (manifest validity, SW lifecycle, offline reload). Worth Jay installing it for real before
+  calling Milestone 5's PWA half fully done.
 
 ## Key decisions locked in (don't re-litigate)
 
