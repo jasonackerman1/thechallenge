@@ -120,17 +120,105 @@ redraft-twist toggle (see "Not done yet"). All in `js/views/commissioner.js` unl
   own live Gist (already well past Episode 1), so it was verified entirely with crafted test
   states instead — same rigor, just not on his real data for this one piece.
 
+## Milestone 5 (PWA shell + real design) — started 2026-07-28
+
+**Real cast photos in hand: official Paramount+ "Character Card" art, one per cast member**,
+saved to `images/cast/{slug}.webp` (24 files, filenames matched to every `js/seed.js` slug and
+verified programmatically — no gaps, no extras). Same exact template across all three teams
+(deep navy dusk cityscape/jungle photography, neon blue-to-red diagonal gradient frame, bold
+condensed italic display type, the show's own chrome-gradient logo) — this is a real brand,
+not team-specific, so it replaced the original plan's more generic "burnt-orange + team colors"
+direction. Confirmed with Jay before building anything.
+
+**Design system built, grounded in the real artwork (sampled actual pixel colors, not guessed):**
+- `--neon-blue: #1081f5`, `--neon-red: #e21e15`, `--bg-void: #0a0d18` — sampled directly from
+  `images/cast/cara-maria.webp`'s border/background via a quick Python/PIL script, not eyeballed.
+- Self-hosted `Anton` display font (`fonts/Anton-Regular.woff2`) for `h1`/`h2` — reused directly
+  from Jay's Storm project rather than fetching a fresh copy, since he'd already vetted/used it
+  there for the same offline-PWA reason.
+- `h1` is solid neon-blue with a subtle glow + skew (not gradient-text — tried that first, it
+  rendered muddy/purple at this font weight/size, so simplified to solid color for legibility;
+  gradient reserved for compact shapes like badges/pills where it reads cleanly).
+- The old `--accent-burnt-orange` var is aliased to the new neon-blue rather than ripped out, so
+  every existing button/element referencing it updated automatically with no per-call-site edits.
+
+**Cast Browser rebuilt as an actual photo card gallery** (`renderCastBrowser` in
+`js/views/player.js`, new `.cast-card`/`.cast-grid` CSS): full character-card art displayed as-is
+(not cropped — it's already professionally designed), season points overlaid as a small gradient
+badge in the corner that doesn't collide with the baked-in name/logo, status shown as a caption
+bar below. Eliminated cast get a CSS `grayscale`+`brightness` filter directly on the `<img>` (no
+need to preprocess the source files) — verified live this reads clearly distinct from active
+cards at a glance. Responsive: 2 columns phone, 3 tablet, 4 desktop.
+
+**Round 2 of design pass — built 2026-07-28, direct response to Jay's reaction to round 1:**
+- Points badge moved from top-right to **bottom-right**, enlarged (1rem &rarr; 1.7rem) — no longer
+  crowds the face, reads as a real stat now.
+- **Team-color treatment added**: each cast card gets a colored gradient "mat" background + glow
+  matching its team (Blue/Orange/Grey — literal team names, so no color-alone ambiguity, doubly
+  reinforced by the existing team section headings). Eliminated cards drop the color entirely
+  (falls back to plain panel background), reinforcing the "out of the game" read.
+- New shared `castCardHtml()` helper in `js/views/shared.js` — same photo-card markup now reused
+  by both Cast Browser and **My Roster**, which was rebuilt from a plain text roster list into
+  the same photo-card grid (phase-aware logic unchanged, only the visual roster display changed).
+- **Leaderboard completely redesigned and repositioned**: was a plain table sitting near the
+  bottom of the player sections (right before Commissioner) — Jay felt that was buried and not
+  visual enough. Now it's a ranked card list (big rank numeral, name, a relative-standing
+  progress bar, gradient-text grand total) at the **top** of the page, right after identity —
+  matches how people actually want to use a fantasy app (check standings first). Gradient text
+  works cleanly here (short 2-4 digit numbers) even though it read muddy on the long `h1` string —
+  confirms that was a length/weight issue, not a fundamental problem with gradient text.
+- **Removed the "Raw state.json" and "Computed leaderboard" debug dumps entirely** — Jay asked
+  directly whether they were still needed; agreed they were pure Milestone-1 debugging scaffolding
+  now that real views exist for everything they showed. Removed from `index.html` and `app.js`
+  (including the now-unused `computeLeaderboard` import there).
+- Added a `.gitignore` (`.DS_Store`) — hadn't existed before, a stray Finder file had shown up as
+  untracked.
+
+**Round 3 — built 2026-07-28, direct response to Jay's reaction to round 2:**
+- **Cast Browser, Preseason Bonus Pick, and Safe Pick are now closed-by-default accordions**
+  (native `<details>`/`<summary>`, styled to match the `h2` look with a `+`/`−` indicator) — Jay's
+  reasoning: these are "look them up when you want them," not primary flow, so they shouldn't
+  sit open and take up scroll space by default. Leaderboard/My Roster stay always-open (primary).
+- **Preseason Bonus Pick now shows position-labeled cards** (same `castCardHtml` card art, "1st
+  Place"/"2nd Place"/"3rd Place" as the status text, a correctness mark once results are known)
+  above the existing dropdowns — dropdowns unchanged, cards are a preview/confirmation layer.
+- **Safe Pick completely rebuilt as a tap-to-pick card grid** covering the full 24-cast roster,
+  smaller cards (new `.cast-grid.compact` — 3/4/6 columns by breakpoint) with four distinct
+  states, confirmed with Jay before building the trickiest one:
+  - **Available** — normal card, team-color glow, tappable (click submits immediately as this
+    week's pick — no separate confirm step, consistent with how quick every other action in this
+    app already is; flagging in case Jay wants a confirm step added after using it for real).
+  - **This week's own (undecided) pick** — blue "chosen" outline, distinct from both outcomes below.
+  - **Used previously, survived that week (hit)** — green glow, green badge showing the points,
+    "Week N — Hit!" status.
+  - **Used previously, eliminated that week (miss)** — grayscale image, red badge showing 0,
+    "Week N — Miss" status. Confirmed with Jay this needed to read distinctly from "eliminated,
+    never used" (below), not just reuse the same greyscale-only treatment.
+  - **Eliminated, never used** — same greyscale treatment as everywhere else, "Eliminated" status.
+- **Bug fixed while extending the shared card helper for these new states:** `.cast-card.active`
+  had been dead CSS since an earlier refactor dropped the class that triggered it — cards were
+  silently missing their intended blue "ACTIVE" status-bar color. Fixed as part of adding the
+  `extraClass` parameter `castCardHtml()` needed for the new Safe Pick states, verified visually.
+- All three new states (hit/miss/eliminated-unused) plus the chosen-pick outline verified
+  together in one live screenshot before calling this done, not just checked in isolation.
+
 ## Not done yet
+- **Commissioner views are still visually plain** — round 3 covered every player-facing section
+  Jay flagged; Commissioner mode (password-gated, only Jay uses it) hasn't had the same design
+  pass. Worth asking whether that even needs the same treatment, or whether "boring but
+  functional" is fine there since it's power-user tooling, not the family-facing experience.
+- **PWA mechanics**: manifest.json, service worker, real app icons (the character-art style
+  suggests real icon possibilities beyond a generic placeholder) — not started.
 - **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
   `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
   redraft feature from the family, so building the toggle now would be inert.
-- **Milestones 5 (PWA shell: manifest/service worker/icons/design system)** and **6
-  (hardening/deploy)** are both still pending.
+- Milestone 6 (hardening/deploy) still pending.
 - **Known open item for the Milestone 5 design pass:** the "Switch" identity link is currently a
   plain always-visible button — anyone can tap it and act as another manager (submit their
   redraft picks, safe pick, etc.). Low risk in a trusted-family context, but Jay flagged it
   explicitly and wants it addressed once there's a real design pass — likely burying it in a
-  settings/profile area instead of a bare button. Don't lose track of this.
+  settings/profile area instead of a bare button. Don't lose track of this — now's the moment to
+  actually build it, given a design pass is literally in progress.
 
 ## Key decisions locked in (don't re-litigate)
 

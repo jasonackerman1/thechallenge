@@ -5,7 +5,7 @@
 import { loadCredentials, saveCredentials, loadCachedState, saveCachedState, loadPlayerIdentity, savePlayerIdentity } from './state.js';
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
-import { computeLeaderboard, computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks } from './scoring.js';
+import { computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks } from './scoring.js';
 import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
 import {
   renderPreseasonDraft,
@@ -36,8 +36,6 @@ const els = {
   status: document.getElementById('status'),
   seedButton: document.getElementById('seed-button'),
   reloadButton: document.getElementById('reload-button'),
-  stateDump: document.getElementById('state-dump'),
-  leaderboardDump: document.getElementById('leaderboard-dump'),
   unlockForm: document.getElementById('unlock-form'),
   passwordInput: document.getElementById('password-input'),
   commissionerPanel: document.getElementById('commissioner-panel'),
@@ -64,10 +62,6 @@ function setStatus(message, isError = false) {
 
 function render(state) {
   currentState = state;
-  els.stateDump.textContent = JSON.stringify(state, null, 2);
-  els.leaderboardDump.textContent = state?.managers
-    ? JSON.stringify(computeLeaderboard(state), null, 2)
-    : '(not seeded yet — click "Seed Initial Data")';
   if (state?.managers) {
     renderPlayerView();
   }

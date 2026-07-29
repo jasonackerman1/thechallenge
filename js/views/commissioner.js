@@ -162,7 +162,7 @@ function scarcityBannerHtml(state) {
   const eligibleCount = computeEligibleCastIds(state).length;
   const activeCount = state.managers.filter((m) => m.active).length;
   if (eligibleCount >= activeCount) return '';
-  return `<p style="color:#d1571f; font-weight:600;">&#9888; Only ${eligibleCount} cast remain for ${activeCount} active managers &mdash; someone will get zero players this week. Consider freezing rosters.</p>`;
+  return `<p style="color:var(--neon-red, #e21e15); font-weight:600;">&#9888; Only ${eligibleCount} cast remain for ${activeCount} active managers &mdash; someone will get zero players this week. Consider freezing rosters.</p>`;
 }
 
 function freezeControlHtml(state) {
@@ -296,7 +296,7 @@ export function renderEpisodeEntry(
     const ready = rostersReadyForEpisode(state, n);
     const startButtonHtml = ready
       ? `<button id="start-episode-btn">Start Episode ${n}</button>`
-      : `<p style="color:var(--accent-burnt-orange, #d1571f);">Episode ${n} can't start yet &mdash; ${
+      : `<p style="color:var(--neon-blue, #1081f5);">Episode ${n} can't start yet &mdash; ${
           n === 1 ? 'finish the preseason draft' : `finish the Week ${n} redraft`
         } first.</p>`;
     container.innerHTML = `

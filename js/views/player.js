@@ -5,15 +5,13 @@
 import {
   computeLeaderboard,
   computeEliminationEpisodes,
-  computeSafePickPointsForManagerWeek,
   computeCastSeasonPoints,
-  getUsedSafePicks,
   SAFE_PICK_POINTS,
   PRESEASON_BONUS_POINTS,
 } from '../scoring.js';
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, TARGET_ROSTER_SIZE } from '../draft.js';
 import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber } from './commissioner.js';
-import { managerName, castName, castNameWithGender } from './shared.js';
+import { managerName, castName, castNameWithGender, castCardHtml } from './shared.js';
 
 /** App-wide "who's using this device" modal — same first-open pattern as the location picker
  *  used elsewhere (auto-opens once if no identity is set, reopenable any time via the small
@@ -53,38 +51,28 @@ export function renderLeaderboard(container, state, currentManagerId) {
     return;
   }
 
-  const rows = computeLeaderboard(state)
-    .map(
-      (row) => `
-        <tr${row.managerId === currentManagerId ? ' style="font-weight:700; background:rgba(209,87,31,0.12);"' : ''}>
-          <td style="text-align:left;">${row.rank}</td>
-          <td style="text-align:left;">${row.name}${row.managerId === currentManagerId ? ' (you)' : ''}</td>
-          <td>${row.grandTotal}</td>
-          <td>${row.thisWeekRosterPoints}</td>
-          <td>${row.thisWeekSafePickPoints}</td>
-          <td>${row.bonusPoints}</td>
-        </tr>
-      `
-    )
+  const standings = computeLeaderboard(state);
+  const maxTotal = Math.max(1, ...standings.map((s) => s.grandTotal));
+
+  const rowsHtml = standings
+    .map((row) => {
+      const isYou = row.managerId === currentManagerId;
+      const barPct = Math.max(4, Math.round((row.grandTotal / maxTotal) * 100));
+      return `
+        <div class="lb-row ${isYou ? 'you' : ''} ${row.rank === 1 ? 'rank-1' : ''}">
+          <div class="lb-rank">${row.rank}</div>
+          <div class="lb-info">
+            <div class="lb-name">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}</div>
+            <div class="lb-bar-track"><div class="lb-bar-fill" style="width:${barPct}%"></div></div>
+            <div class="lb-breakdown">This week +${row.thisWeekRosterPoints} &middot; Safe pick +${row.thisWeekSafePickPoints} &middot; Bonus +${row.bonusPoints}</div>
+          </div>
+          <div class="lb-total">${row.grandTotal}</div>
+        </div>
+      `;
+    })
     .join('');
 
-  container.innerHTML = `
-    <div style="overflow-x:auto;">
-      <table>
-        <thead>
-          <tr>
-            <th style="text-align:left;">Rank</th>
-            <th style="text-align:left;">Manager</th>
-            <th>Total</th>
-            <th>This Week</th>
-            <th>Safe Pick</th>
-            <th>Bonus</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  `;
+  container.innerHTML = rowsHtml;
 }
 
 /** Whatever roster is currently "in effect" for a manager: the most recently completed weekly
@@ -100,8 +88,20 @@ function currentRosterIds(state, managerId) {
   return [];
 }
 
-function rosterListHtml(state, castIds) {
-  return castIds.length ? castIds.map((id) => castNameWithGender(state, id)).join(', ') : '(none yet)';
+/** Same photo-card treatment as Cast Browser, scoped to just this manager's current roster. */
+function rosterCardsHtml(state, castIds) {
+  if (!castIds.length) return '<p style="color:var(--text-muted);">(none yet)</p>';
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  const seasonPoints = computeCastSeasonPoints(state);
+  const cards = castIds
+    .map((id) => {
+      const eliminatedAt = eliminationEpisodes.get(id);
+      const eliminated = eliminatedAt !== undefined;
+      const statusText = eliminated ? `Eliminated &mdash; Ep ${eliminatedAt}` : 'Active';
+      return castCardHtml(state, id, { points: seasonPoints.get(id) ?? 0, statusText, eliminated });
+    })
+    .join('');
+  return `<div class="cast-grid">${cards}</div>`;
 }
 
 export function renderMyRoster(container, state, currentManagerId, { onPick }) {
@@ -113,7 +113,7 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
   if (state.meta.rosterFrozen) {
     container.innerHTML = `
       <p><strong>Rosters are frozen for the rest of the season.</strong></p>
-      <p>Your roster: ${rosterListHtml(state, currentRosterIds(state, currentManagerId))}</p>
+      ${rosterCardsHtml(state, currentRosterIds(state, currentManagerId))}
     `;
     return;
   }
@@ -142,7 +142,8 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
 
       container.innerHTML = `
         <p><strong>It's your turn!</strong> Week ${currentWeek} redraft, round ${nextSlot.round + 1} of ${draft.board.length}.</p>
-        <p>Your roster so far: ${rosterListHtml(state, myRoster)}</p>
+        <h4>Your Roster So Far</h4>
+        ${rosterCardsHtml(state, myRoster)}
         ${genderHintHtml}
         <div class="control-row">
           <select id="my-pick-select">${castOptions}</select>
@@ -155,7 +156,8 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
     } else {
       container.innerHTML = `
         <p>Week ${currentWeek} redraft is in progress &mdash; waiting on <strong>${managerName(state, nextSlot.managerId)}</strong>'s pick (round ${nextSlot.round + 1} of ${draft.board.length}).</p>
-        <p>Your roster so far this week: ${rosterListHtml(state, myRoster)}</p>
+        <h4>Your Roster So Far</h4>
+        ${rosterCardsHtml(state, myRoster)}
       `;
     }
     return;
@@ -170,35 +172,35 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
   } else if (week === 2 && (!prevEpisode || !prevEpisode.finalized)) {
     container.innerHTML = `
       <p><strong>Your Week 1 roster (locked in until Episode 1 is finalized):</strong></p>
-      <p>${rosterListHtml(state, roster)}</p>
+      ${rosterCardsHtml(state, roster)}
     `;
   } else if (!prevEpisode || !prevEpisode.finalized) {
     container.innerHTML = `
       <p>Waiting on Episode ${week - 1} to be finalized before the Week ${week} redraft opens.</p>
-      <p>Your current roster: ${rosterListHtml(state, roster)}</p>
+      ${rosterCardsHtml(state, roster)}
     `;
   } else {
     container.innerHTML = `
       <p>Waiting on the commissioner to open the Week ${week} redraft.</p>
-      <p>Your current roster: ${rosterListHtml(state, roster)}</p>
+      ${rosterCardsHtml(state, roster)}
     `;
   }
 }
 
-function safePickHistoryHtml(state, managerId, uptoWeek) {
-  const weeks = Object.keys(state.safePicks ?? {})
-    .map(Number)
-    .filter((w) => w < uptoWeek)
-    .sort((a, b) => a - b);
-  const rows = weeks
-    .map((w) => {
-      const pick = state.safePicks[String(w)].find((p) => p.managerId === managerId);
-      if (!pick) return null;
-      const points = computeSafePickPointsForManagerWeek(state, managerId, w);
-      return `<li>Week ${w}: ${castName(state, pick.castId)} &mdash; ${points} pt(s)</li>`;
-    })
-    .filter(Boolean);
-  return rows.length ? `<ul>${rows.join('')}</ul>` : '<p>(none yet)</p>';
+/** Every cast member this manager has ever safe-picked, with the outcome once that week's
+ *  episode is finalized (undecided if the pick is this week's still-open one). */
+function mySafePickOutcomes(state, managerId) {
+  const outcomes = new Map();
+  for (const [weekStr, picks] of Object.entries(state.safePicks ?? {})) {
+    const pick = picks.find((p) => p.managerId === managerId);
+    if (!pick) continue;
+    const week = Number(weekStr);
+    const episode = state.episodes.find((e) => e.episodeNumber === week);
+    const decided = !!episode?.finalized;
+    const eliminatedThisWeek = decided && (episode.eliminations ?? []).some((e) => e.castId === pick.castId);
+    outcomes.set(pick.castId, { week, decided, success: decided && !eliminatedThisWeek });
+  }
+  return outcomes;
 }
 
 export function renderSafePick(container, state, currentManagerId, { onSubmitSafePick, onClearSafePick }) {
@@ -208,33 +210,41 @@ export function renderSafePick(container, state, currentManagerId, { onSubmitSaf
   }
 
   const week = nextEpisodeNumber(state);
-  const usedCastIds = getUsedSafePicks(state, currentManagerId);
-  const eliminatedCastIds = new Set(computeEliminationEpisodes(state.episodes).keys());
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  const outcomes = mySafePickOutcomes(state, currentManagerId);
   const existingPick = (state.safePicks?.[String(week)] ?? []).find((p) => p.managerId === currentManagerId);
-  // This week's own pick shouldn't count as "already used" against itself, or it'd vanish from
-  // its own dropdown and the "selected" pre-fill below would never actually apply to anything.
-  const available = state.cast.filter(
-    (c) => (!usedCastIds.has(c.id) || c.id === existingPick?.castId) && !eliminatedCastIds.has(c.id)
-  );
+  const seasonPoints = computeCastSeasonPoints(state);
 
-  const castOptions = available
-    .map((c) => `<option value="${c.id}" ${existingPick?.castId === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
+  const cardsHtml = state.cast
+    .map((c) => {
+      const isCurrentPick = existingPick?.castId === c.id;
+      const outcome = outcomes.get(c.id);
+      const eliminated = eliminationEpisodes.has(c.id);
+
+      if (outcome?.decided && !isCurrentPick) {
+        return outcome.success
+          ? castCardHtml(state, c.id, { points: SAFE_PICK_POINTS, statusText: `Week ${outcome.week} &mdash; Hit!`, extraClass: 'sp-success' })
+          : castCardHtml(state, c.id, { points: 0, statusText: `Week ${outcome.week} &mdash; Miss`, extraClass: 'sp-miss' });
+      }
+      if (eliminated && !isCurrentPick) {
+        return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText: 'Eliminated', eliminated: true });
+      }
+      // Available to pick (or this week's own not-yet-decided pick).
+      const extraClass = ['sp-pickable', isCurrentPick ? 'sp-chosen' : ''].filter(Boolean).join(' ');
+      const statusText = isCurrentPick ? `Week ${week} Pick` : castNameWithGender(state, c.id);
+      return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText, extraClass });
+    })
     .join('');
 
   container.innerHTML = `
-    <p>Pick one cast member you think survives Week ${week}'s episode &mdash; +${SAFE_PICK_POINTS} points if they do.
+    <p>Tap one cast member you think survives Week ${week}'s episode &mdash; +${SAFE_PICK_POINTS} points if they do.
     Each cast member can only be used once all season, and this locks the moment the commissioner starts entering Week ${week}'s results.</p>
     ${existingPick ? `<p><strong>Current pick:</strong> ${castName(state, existingPick.castId)} <button id="safe-pick-clear-btn" class="btn-inline" style="background:#7a2020;">Clear</button></p>` : ''}
-    <div class="control-row">
-      <select id="safe-pick-select">${castOptions}</select>
-      <button id="safe-pick-submit-btn">${existingPick ? 'Change Pick' : 'Submit Safe Pick'}</button>
-    </div>
-    <h4>Past Safe Picks</h4>
-    ${safePickHistoryHtml(state, currentManagerId, week)}
+    <div class="cast-grid compact">${cardsHtml}</div>
   `;
 
-  container.querySelector('#safe-pick-submit-btn').addEventListener('click', () => {
-    onSubmitSafePick(container.querySelector('#safe-pick-select').value);
+  container.querySelectorAll('.cast-card.sp-pickable').forEach((card) => {
+    card.addEventListener('click', () => onSubmitSafePick(card.dataset.castId));
   });
   container.querySelector('#safe-pick-clear-btn')?.addEventListener('click', onClearSafePick);
 }
@@ -242,6 +252,28 @@ export function renderSafePick(container, state, currentManagerId, { onSubmitSaf
 /** Locks the moment Episode 1 is finalized — a one-time prediction, not a weekly action. */
 export function isPreseasonBonusPickLocked(state) {
   return state.episodes.some((e) => e.episodeNumber === 1 && e.finalized);
+}
+
+/** Position-labeled cards for a submitted pick — same card art as everywhere else, with the
+ *  predicted-position label (and a correctness mark once results are known) as the status. */
+function bonusPickCardsHtml(state, pick) {
+  if (!pick) return '';
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  const seasonPoints = computeCastSeasonPoints(state);
+  const resultsKnown = state.finalChallenge?.completed;
+  const slots = [
+    { label: '1st Place', castId: pick.first, actual: state.finalChallenge?.winner },
+    { label: '2nd Place', castId: pick.second, actual: state.finalChallenge?.second },
+    { label: '3rd Place', castId: pick.third, actual: state.finalChallenge?.third },
+  ];
+  const cards = slots
+    .map(({ label, castId, actual }) => {
+      const hit = resultsKnown && castId === actual;
+      const statusText = resultsKnown ? `${label} ${hit ? '&#10003; correct' : ''}` : label;
+      return castCardHtml(state, castId, { points: seasonPoints.get(castId) ?? 0, statusText, eliminated: eliminationEpisodes.has(castId) });
+    })
+    .join('');
+  return `<div class="cast-grid">${cards}</div>`;
 }
 
 export function renderPreseasonBonusPick(container, state, currentManagerId, { onSubmit }) {
@@ -258,19 +290,9 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
       container.innerHTML = `<p>Preseason bonus picks are locked (Episode 1 is finalized). You didn't submit one.</p>`;
       return;
     }
-    const resultsKnown = state.finalChallenge?.completed;
-    const resultLine = (label, pickId, actualId) => {
-      if (!resultsKnown) return `${label}: ${castName(state, pickId)}`;
-      const hit = pickId === actualId;
-      return `${label}: ${castName(state, pickId)} ${hit ? '&#10003; correct' : ''}`;
-    };
     container.innerHTML = `
       <p><strong>Your preseason bonus pick (locked):</strong></p>
-      <ul>
-        <li>${resultLine('1st', existingPick.first, state.finalChallenge?.winner)}</li>
-        <li>${resultLine('2nd', existingPick.second, state.finalChallenge?.second)}</li>
-        <li>${resultLine('3rd', existingPick.third, state.finalChallenge?.third)}</li>
-      </ul>
+      ${bonusPickCardsHtml(state, existingPick)}
     `;
     return;
   }
@@ -283,6 +305,7 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
   container.innerHTML = `
     <p>Predict the season's top 3 finishers. Points if you're right: 1st +${PRESEASON_BONUS_POINTS.first},
     2nd +${PRESEASON_BONUS_POINTS.second}, 3rd +${PRESEASON_BONUS_POINTS.third}. Locks the moment Episode 1 is finalized.</p>
+    ${existingPick ? `<p><strong>Current pick:</strong></p>${bonusPickCardsHtml(state, existingPick)}` : ''}
     <div class="control-row">
       <select id="bonus-first-select">${castOptions(existingPick?.first)}</select>
       <select id="bonus-second-select">${castOptions(existingPick?.second)}</select>
@@ -310,29 +333,16 @@ export function renderCastBrowser(container, state) {
 
   const sectionsHtml = teams
     .map((team) => {
-      const rows = state.cast
+      const cards = state.cast
         .filter((c) => c.team === team)
         .map((c) => {
           const eliminatedAt = eliminationEpisodes.get(c.id);
-          const status = eliminatedAt !== undefined ? `Eliminated (Ep ${eliminatedAt})` : 'Active';
-          return `
-            <tr${eliminatedAt !== undefined ? ' style="color:var(--text-muted);"' : ''}>
-              <td style="text-align:left;">${castNameWithGender(state, c.id)}</td>
-              <td style="text-align:left;">${status}</td>
-              <td>${seasonPoints.get(c.id) ?? 0}</td>
-            </tr>
-          `;
+          const eliminated = eliminatedAt !== undefined;
+          const statusText = eliminated ? `Eliminated &mdash; Ep ${eliminatedAt}` : 'Active';
+          return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText, eliminated });
         })
         .join('');
-      return `
-        <h4>${team}</h4>
-        <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th style="text-align:left;">Cast</th><th style="text-align:left;">Status</th><th>Season Pts</th></tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      `;
+      return `<h4>${team}</h4><div class="cast-grid">${cards}</div>`;
     })
     .join('');
 

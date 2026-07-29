@@ -5,13 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Challenge S42: Cutthroat — Fantasy League</title>
   <style>
+    /* Display font + brand palette sampled directly from the show's own official character
+       card art (images/cast/*.webp) — neon blue-to-red diagonal gradient border, deep navy
+       background — rather than an invented palette. Self-hosted for offline PWA use. */
+    @font-face {
+      font-family: 'Anton';
+      src: url('fonts/Anton-Regular.woff2') format('woff2');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
     :root {
       color-scheme: dark;
-      --bg-void: #0b0b0d;
-      --bg-panel: #16161a;
-      --accent-burnt-orange: #d1571f;
-      --text-primary: #ece7e1;
-      --text-muted: #9a9590;
+      --bg-void: #0a0d18;
+      --bg-panel: #131a2c;
+      --neon-blue: #1081f5;
+      --neon-red: #e21e15;
+      --brand-gradient: linear-gradient(135deg, var(--neon-blue), var(--neon-red));
+      --accent-burnt-orange: #1081f5; /* legacy var name, now aliased to the neon-blue brand color */
+      --text-primary: #eef1f7;
+      --text-muted: #8b93a8;
     }
     * { box-sizing: border-box; }
     html, body { background: var(--bg-void); }
@@ -24,8 +37,58 @@
       font-size: 16px;
       line-height: 1.4;
     }
-    h1 { color: var(--accent-burnt-orange); font-size: 1.15rem; letter-spacing: 0.04em; }
-    h2 { font-size: 1.05rem; margin-top: 32px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 20px; }
+    h1 {
+      font-family: 'Anton', sans-serif;
+      font-weight: 400;
+      font-size: 1.6rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--neon-blue);
+      text-shadow: 0 0 14px rgba(16,129,245,0.45);
+      transform: skewX(-6deg);
+      transform-origin: left;
+      display: inline-block;
+      margin: 0;
+    }
+    h2 {
+      font-family: 'Anton', sans-serif;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-size: 1.2rem;
+      margin-top: 32px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 20px;
+      color: var(--text-primary);
+    }
+    /* Collapsible sections (Cast Browser, Preseason Bonus Pick, Safe Pick) — closed by default,
+       since they're "look these up when you want them" content, not the main flow. */
+    details.section {
+      margin-top: 32px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 20px;
+    }
+    details.section > summary {
+      font-family: 'Anton', sans-serif;
+      font-weight: 400;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      font-size: 1.2rem;
+      color: var(--text-primary);
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    details.section > summary::-webkit-details-marker { display: none; }
+    details.section > summary::after {
+      content: '+';
+      font-size: 1.4rem;
+      color: var(--neon-blue);
+      margin-left: 10px;
+    }
+    details.section[open] > summary::after { content: '\2212'; }
     h3 { font-size: 1rem; margin-top: 24px; }
     h4 {
       font-size: 0.8rem;
@@ -122,6 +185,138 @@
       width: 100%;
     }
     .modal-card h3 { margin-top: 0; }
+
+    /* Leaderboard: a ranked list of cards rather than a plain table — big rank numeral, a
+       progress bar sized relative to the leader's total (at-a-glance standing), gradient-text
+       grand total (short numbers only — the h1 experiment showed gradient text goes muddy on
+       long strings, but a compact 2-4 digit number reads cleanly). */
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bg-panel);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .lb-row.you { border-color: var(--neon-blue); box-shadow: 0 0 16px rgba(16,129,245,0.3); }
+    .lb-row.rank-1 { border-color: var(--neon-red); box-shadow: 0 0 18px rgba(226,30,21,0.3); }
+    .lb-rank {
+      font-family: 'Anton', sans-serif;
+      font-size: 1.5rem;
+      color: var(--text-muted);
+      min-width: 1.6rem;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .lb-row.rank-1 .lb-rank { color: var(--neon-red); }
+    .lb-info { flex: 1; min-width: 0; }
+    .lb-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+    .lb-name .you-tag {
+      font-size: 0.6rem;
+      font-weight: 700;
+      background: var(--brand-gradient);
+      color: #fff;
+      padding: 2px 7px;
+      border-radius: 999px;
+      margin-left: 6px;
+      letter-spacing: 0.04em;
+      vertical-align: middle;
+    }
+    .lb-bar-track { height: 5px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
+    .lb-bar-fill { height: 100%; background: var(--brand-gradient); border-radius: 999px; }
+    .lb-breakdown { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; }
+    .lb-total {
+      font-family: 'Anton', sans-serif;
+      font-size: 1.8rem;
+      line-height: 1;
+      flex-shrink: 0;
+      background: var(--brand-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* Cast cards use the show's own official character-card art as-is (already has the neon
+       frame + name baked in) — game data overlays as a badge rather than duplicating the name. */
+    .cast-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin: 12px 0 24px;
+    }
+    .cast-card {
+      position: relative;
+      border-radius: 12px;
+      overflow: hidden;
+      padding: 5px;
+      background: var(--bg-panel);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+      transition: box-shadow 0.2s;
+    }
+    .cast-card.team-blue { background: linear-gradient(165deg, #2e8eff, var(--bg-panel) 65%); box-shadow: 0 0 22px rgba(46,142,255,0.4); }
+    .cast-card.team-orange { background: linear-gradient(165deg, #ff8c1a, var(--bg-panel) 65%); box-shadow: 0 0 22px rgba(255,140,26,0.4); }
+    .cast-card.team-grey { background: linear-gradient(165deg, #b8c2d0, var(--bg-panel) 65%); box-shadow: 0 0 22px rgba(184,194,208,0.35); }
+    .cast-card.eliminated { background: var(--bg-panel) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.5) !important; }
+    .cast-card .card-inner { border-radius: 8px; overflow: hidden; position: relative; }
+    .cast-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 5;
+      object-fit: cover;
+      transition: filter 0.2s;
+    }
+    .cast-card.eliminated img { filter: grayscale(0.9) brightness(0.55); }
+    .cast-card .points-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: var(--brand-gradient);
+      color: #fff;
+      font-family: 'Anton', sans-serif;
+      font-size: 1.7rem;
+      line-height: 1;
+      min-width: 2.2rem;
+      text-align: center;
+      padding: 8px 14px 6px;
+      border-radius: 999px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.6);
+    }
+    .cast-card .status-bar {
+      padding: 6px 8px;
+      font-size: 0.68rem;
+      text-align: center;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+    }
+    .cast-card.active .status-bar { color: var(--neon-blue); }
+    .cast-card.eliminated .status-bar { color: var(--text-muted); }
+
+    /* Safe Pick specific states — layered on top of the base card via extraClass, so they
+       override the team-color glow (the outcome matters more here than the team). */
+    .cast-card.sp-success { background: linear-gradient(165deg, #1baf7a, var(--bg-panel) 65%) !important; box-shadow: 0 0 20px rgba(27,175,122,0.4) !important; }
+    .cast-card.sp-success .points-badge { background: linear-gradient(135deg, #1baf7a, #0d8a5c); }
+    .cast-card.sp-success .status-bar { color: #1baf7a; }
+    .cast-card.sp-miss { background: var(--bg-panel) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.5) !important; }
+    .cast-card.sp-miss .card-inner img { filter: grayscale(0.85) brightness(0.55); }
+    .cast-card.sp-miss .points-badge { background: #7a2020; }
+    .cast-card.sp-miss .status-bar { color: var(--neon-red); }
+    .cast-card.sp-pickable { cursor: pointer; }
+    .cast-card.sp-chosen { outline: 3px solid var(--neon-blue); outline-offset: 2px; }
+
+    /* Smaller variant for the Safe Pick full-roster grid — same card, denser layout. */
+    .cast-grid.compact { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .cast-grid.compact .points-badge { font-size: 1.1rem; padding: 5px 9px 4px; min-width: 1.6rem; }
+    .cast-grid.compact .status-bar { font-size: 0.55rem; padding: 4px 5px; }
+    @media (min-width: 640px) { .cast-grid.compact { grid-template-columns: repeat(4, 1fr); } }
+    @media (min-width: 960px) { .cast-grid.compact { grid-template-columns: repeat(6, 1fr); } }
+
+    @media (min-width: 480px) {
+      .cast-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
     table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
     th, td {
       padding: 8px 10px;
@@ -165,6 +360,7 @@
       body { max-width: 860px; padding: 40px; }
       h1 { font-size: 1.55rem; }
       .checkbox-grid { grid-template-columns: repeat(3, 1fr); }
+      .cast-grid { grid-template-columns: repeat(4, 1fr); }
     }
   </style>
 </head>
@@ -193,20 +389,26 @@
     <button id="reload-button" type="button">Force Reload from Gist</button>
   </div>
 
+  <h2>Leaderboard</h2>
+  <div id="leaderboard-container"></div>
+
   <h2>My Roster</h2>
   <div id="my-roster-container"></div>
 
-  <h2>Safe Pick</h2>
-  <div id="safe-pick-container"></div>
+  <details class="section">
+    <summary>Safe Pick</summary>
+    <div id="safe-pick-container"></div>
+  </details>
 
-  <h2>Preseason Bonus Pick</h2>
-  <div id="bonus-pick-container"></div>
+  <details class="section">
+    <summary>Preseason Bonus Pick</summary>
+    <div id="bonus-pick-container"></div>
+  </details>
 
-  <h2>Cast Browser</h2>
-  <div id="cast-browser-container"></div>
-
-  <h2>Leaderboard</h2>
-  <div id="leaderboard-container"></div>
+  <details class="section">
+    <summary>Cast Browser</summary>
+    <div id="cast-browser-container"></div>
+  </details>
 
   <h2>Commissioner</h2>
   <form id="unlock-form">
@@ -226,12 +428,6 @@
     <h3>Final Challenge</h3>
     <div id="final-challenge-container"></div>
   </div>
-
-  <h2>Raw state.json</h2>
-  <pre id="state-dump">(not loaded yet)</pre>
-
-  <h2>Computed leaderboard (scoring.js output)</h2>
-  <pre id="leaderboard-dump">(not loaded yet)</pre>
 
   <div id="identity-modal" class="modal-overlay" style="display:none;"></div>
 
