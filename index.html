@@ -26,11 +26,6 @@
       color-scheme: dark;
       --bg-void: #0a0d18;
       --bg-panel: #131a2c;
-      --bg-shadow-maroon: #441f23; /* dusk-to-warm-horizon shadow tone, sampled from images/logo.jpg
-        and reused from the app icon's own background gradient — reference key art/logo shots
-        (images/reference/*.jpg) all show a moody dusk gradient behind the chrome/neon logo, never
-        a flat single dark color, so the page background gets the same treatment below instead of
-        a flat --bg-void fill. */
       --neon-blue: #1081f5;
       --neon-red: #e21e15;
       --brand-gradient: linear-gradient(135deg, var(--neon-blue), var(--neon-red));
@@ -39,18 +34,7 @@
       --text-muted: #8b93a8;
     }
     * { box-sizing: border-box; }
-    html, body { background-color: var(--bg-void); }
-    body {
-      /* A soft dusk-glow band near the top of the page (behind the logo/tagline/connect area),
-         fading back to the flat --bg-void base below it — matches how every reference image
-         shows the glow concentrated around the logo/horizon, not spread evenly down a long page.
-         Sized in px rather than tied to page or viewport height so it stays a fixed-size glow
-         regardless of how long the page's content is. */
-      background-image: linear-gradient(180deg, transparent 0%, var(--bg-shadow-maroon) 60%, transparent 100%);
-      background-repeat: no-repeat;
-      background-position: top center;
-      background-size: 100% 640px;
-    }
+    html, body { background: var(--bg-void); }
     body {
       margin: 0 auto;
       padding: 16px;
