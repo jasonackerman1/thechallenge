@@ -4,6 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>The Challenge S42: Cutthroat — Fantasy League</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#0a0d18" />
+  <link rel="icon" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Cutthroat Fantasy" />
   <style>
     /* Display font + brand palette sampled directly from the show's own official character
        card art (images/cast/*.webp) — neon blue-to-red diagonal gradient border, deep navy
@@ -37,18 +44,12 @@
       font-size: 16px;
       line-height: 1.4;
     }
-    h1 {
-      font-family: 'Anton', sans-serif;
-      font-weight: 400;
-      font-size: 1.6rem;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-      color: var(--neon-blue);
-      text-shadow: 0 0 14px rgba(16,129,245,0.45);
-      transform: skewX(-6deg);
-      transform-origin: left;
+    h1 { margin: 0; line-height: 0; text-align: center; }
+    .site-logo {
       display: inline-block;
-      margin: 0;
+      max-width: 200px;
+      width: 100%;
+      height: auto;
     }
     h2 {
       font-family: 'Anton', sans-serif;
@@ -345,7 +346,7 @@
 
     @media (min-width: 640px) {
       body { max-width: 640px; padding: 24px; font-size: 17px; }
-      h1 { font-size: 1.35rem; }
+      .site-logo { max-width: 240px; }
       h2 { font-size: 1.15rem; }
       h3 { font-size: 1.1rem; }
       .control-row { flex-direction: row; flex-wrap: wrap; align-items: stretch; }
@@ -358,17 +359,15 @@
 
     @media (min-width: 960px) {
       body { max-width: 860px; padding: 40px; }
-      h1 { font-size: 1.55rem; }
+      .site-logo { max-width: 280px; }
       .checkbox-grid { grid-template-columns: repeat(3, 1fr); }
       .cast-grid { grid-template-columns: repeat(4, 1fr); }
     }
   </style>
 </head>
 <body>
-  <h1>THE CHALLENGE S42: CUTTHROAT — FANTASY LEAGUE</h1>
-  <p class="note">Milestone 1 debug shell — data layer only. Real commissioner/player UI comes in later milestones.</p>
-
-  <div id="identity-container"></div>
+  <h1><img id="site-logo" class="site-logo" src="images/logo.jpg" alt="The Challenge S42: Cutthroat — Fantasy League" /></h1>
+  <p class="note">Family fantasy league — draft, score, and track cast through the season.</p>
 
   <form id="setup-form">
     <label>
@@ -383,11 +382,6 @@
   </form>
 
   <div id="status"></div>
-
-  <div class="actions">
-    <button id="seed-button" type="button">Seed Initial Data (first-time setup only)</button>
-    <button id="reload-button" type="button">Force Reload from Gist</button>
-  </div>
 
   <h2>Leaderboard</h2>
   <div id="leaderboard-container"></div>
@@ -416,6 +410,14 @@
     <button type="submit">Unlock</button>
   </form>
   <div id="commissioner-panel" style="display:none;">
+    <h3>Data Sync</h3>
+    <p class="note">"Seed Initial Data" wipes the entire Gist and replaces it with a blank season
+    — only for setting up a brand-new season, never during one already in progress.</p>
+    <div class="actions">
+      <button id="seed-button" type="button">Seed Initial Data (wipes all data)</button>
+      <button id="reload-button" type="button">Force Reload from Gist</button>
+    </div>
+
     <h3>Preseason Draft</h3>
     <div id="draft-container"></div>
 

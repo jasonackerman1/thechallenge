@@ -36,13 +36,33 @@ export function renderIdentityModal(modalEl, state, { onSetIdentity }) {
   });
 }
 
-/** Small persistent line showing the current identity, with a link that reopens the modal. */
-export function renderIdentityIndicator(container, state, currentManagerId, { onSwitch }) {
-  const current = state.managers.find((m) => m.id === currentManagerId);
-  container.innerHTML = current
-    ? `<p>Playing as <strong>${current.name}</strong>. <button id="switch-identity-btn" class="btn-inline">Switch</button></p>`
-    : `<p><button id="switch-identity-btn" class="btn-inline">Who's using this device?</button></p>`;
-  container.querySelector('#switch-identity-btn').addEventListener('click', onSwitch);
+const TRIPLE_TAP_WINDOW_MS = 800;
+
+/** No visible "Playing as X" text anymore — the leaderboard already highlights the current
+ *  manager's row, so it was redundant. The switch trigger itself is now fully hidden: three
+ *  taps/clicks on the header logo within a short window reopens the identity modal. No visual
+ *  affordance at all (no cursor change, no hover state) — this is deliberately a secret gesture,
+ *  not a discoverable control, since a visible "Switch" button (even a small text link) still
+ *  invited casual/accidental identity switching. Bound once per logo element via a dataset flag,
+ *  since renderPlayerView() re-runs on every state update and would otherwise stack listeners. */
+export function renderIdentityIndicator(logoEl, { onSwitch }) {
+  if (!logoEl || logoEl.dataset.switchBound) return;
+  logoEl.dataset.switchBound = 'true';
+
+  let tapCount = 0;
+  let resetTimer = null;
+  logoEl.addEventListener('click', () => {
+    tapCount += 1;
+    clearTimeout(resetTimer);
+    if (tapCount >= 3) {
+      tapCount = 0;
+      onSwitch();
+      return;
+    }
+    resetTimer = setTimeout(() => {
+      tapCount = 0;
+    }, TRIPLE_TAP_WINDOW_MS);
+  });
 }
 
 export function renderLeaderboard(container, state, currentManagerId) {

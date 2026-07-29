@@ -43,7 +43,7 @@ const els = {
   episodeContainer: document.getElementById('episode-container'),
   redraftContainer: document.getElementById('redraft-container'),
   finalChallengeContainer: document.getElementById('final-challenge-container'),
-  identityContainer: document.getElementById('identity-container'),
+  siteLogo: document.getElementById('site-logo'),
   identityModal: document.getElementById('identity-modal'),
   leaderboardContainer: document.getElementById('leaderboard-container'),
   myRosterContainer: document.getElementById('my-roster-container'),
@@ -86,9 +86,7 @@ function openIdentityModal() {
 
 function renderPlayerView() {
   const currentManagerId = loadPlayerIdentity();
-  renderIdentityIndicator(els.identityContainer, currentState, currentManagerId, {
-    onSwitch: openIdentityModal,
-  });
+  renderIdentityIndicator(els.siteLogo, { onSwitch: openIdentityModal });
   renderLeaderboard(els.leaderboardContainer, currentState, currentManagerId);
   renderMyRoster(els.myRosterContainer, currentState, currentManagerId, {
     onPick: (castId) =>
@@ -389,3 +387,9 @@ function boot() {
 }
 
 boot();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((err) => console.error('SW registration failed', err));
+  });
+}
