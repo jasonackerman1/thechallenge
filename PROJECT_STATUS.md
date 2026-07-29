@@ -4,10 +4,18 @@ Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture p
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**Git status: clean and pushed.** Commit `9dbc874` — PWA shell (manifest, service worker, real
-logo, generated icons) + identity/admin UI hardening — on top of `0bbb209` (readability refactor)
-and the Milestone 4 commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local
-uncommitted changes as of this checkpoint.
+**Git status: clean and pushed.** Commit `9c87f47` — enabled GitHub Pages + `.nojekyll` — on top
+of `9dbc874` (PWA shell: manifest, service worker, real logo, generated icons + identity/admin UI
+hardening), `0bbb209` (readability refactor), and the Milestone 4 commit `e85f112` (Safe Pick,
+Cast Browser, Preseason Bonus Pick). No local uncommitted changes as of this checkpoint.
+
+**Live URL: https://jasonackerman1.github.io/thechallenge/** — GitHub Pages wasn't actually
+enabled before this (`has_pages: false` via the API); enabled it serving from `main`/root, added
+`.nojekyll` so GitHub serves the static files as-is instead of running the default Jekyll build.
+**Confirmed by Jay on his actual phone, 2026-07-29: loaded the live URL and successfully added it
+to his home screen ("saved it to my desktop on my phone").** This closes out the one open
+verification gap from the PWA shell work — everything before this had only been checked with
+headless Chromium, not a real device.
 
 **Live test-season state (Jay's real Gist):** preseason draft complete, Episodes 1-3 scored and
 finalized (Episode 3 included an intentional elimination of a couple of managers' safe picks, to
@@ -265,11 +273,10 @@ screenshot:**
 - **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
   `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
   redraft feature from the family, so building the toggle now would be inert.
-- Milestone 6 (hardening/deploy) still pending.
-- **Not yet tested on a real phone as an actually-installed PWA** (add-to-home-screen, standalone
-  launch, icon appearance on an actual device) — verification so far is headless-Chromium-only
-  (manifest validity, SW lifecycle, offline reload). Worth Jay installing it for real before
-  calling Milestone 5's PWA half fully done.
+- Milestone 6 (hardening/deploy) still pending — deploy is now partially done (Pages is live),
+  but the concurrent-write test and a full offline test on a real device are still outstanding.
+- ~~Not yet tested on a real phone as an actually-installed PWA~~ — **done, confirmed by Jay
+  2026-07-29.** Milestone 5's PWA half is now fully verified, not just headless-checked.
 
 ## Key decisions locked in (don't re-litigate)
 
