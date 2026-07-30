@@ -71,6 +71,14 @@ function setStatus(message, isError = false) {
 
 function render(state) {
   currentState = state;
+  if (!state?.managers) {
+    // Nothing seeded yet — renderPlayerView (which normally gates this section by identity)
+    // never runs without managers to pick an identity from, so show Commissioner here as the
+    // bootstrap path: whoever holds the token/Gist ID needs to reach Seed Initial Data to
+    // create the season in the first place. Once real managers exist, renderPlayerView's
+    // identity-based gating below takes over on every subsequent render.
+    els.commissionerSection.style.display = '';
+  }
   if (state?.managers) {
     renderPlayerView();
   }
