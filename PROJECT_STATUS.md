@@ -9,15 +9,17 @@ Initial Data button. Preseason Mode confirmed working correctly on his real devi
 mutation on the live Gist from this point forward is real family data — the old mid-season test
 data described elsewhere in this file no longer exists and should not be treated as current.**
 
-**Git status: clean and pushed.** Commit `aea0820` — Cast Browser directions + Winter Circle
-dropdown labels — on top of `7582e5a` (fixed a Commissioner-section bootstrap lockout found via a
-pre-reset double-check, see below), `e613460` (Winter Circle rename/reorder + Commissioner
-gating), `75cd9d7` (preseason draft self-service picking), `6985e17` (Safe Pick reverted to
-dropdown+Submit), `c2d2406` (Preseason Mode + cast bio modal + denser Safe Pick cards), `a32746a`
-(Jay's own commit: `images/reference/` + status file), `7bf13a9` (final background color pass),
-`9c87f47` (GitHub Pages enabled), `9dbc874` (PWA shell), `0bbb209` (readability refactor), and the
-Milestone 4 commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local uncommitted
-changes, no untracked files, all on `origin/main`.
+**Git status: clean and pushed.** Commit `2e03116` — Commissioner panel visual design pass — on
+top of `0145a21` (redraft-twist reveal toggle), `aea0820` (Cast Browser directions + Winter Circle
+dropdown labels), `7582e5a` (fixed a Commissioner-section bootstrap lockout found via a pre-reset
+double-check), `e613460` (Winter Circle rename/reorder + Commissioner gating), `75cd9d7`
+(preseason draft self-service picking), `6985e17` (Safe Pick reverted to dropdown+Submit),
+`c2d2406` (Preseason Mode + cast bio modal + denser Safe Pick cards), `a32746a` (Jay's own commit:
+`images/reference/` + status file), `7bf13a9` (final background color pass), `9c87f47` (GitHub
+Pages enabled), `9dbc874` (PWA shell), `0bbb209` (readability refactor), and the Milestone 4
+commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local uncommitted changes, no
+untracked files, all on `origin/main`. **The punch list is now empty** — see the bottom of this
+file.
 
 **Draft night is Saturday, Aug 1, 2026, 8:30pm** — confirmed by Jay, used as the Preseason Mode
 countdown target (`js/views/player.js`'s `DRAFT_COUNTDOWN_TARGET`, parsed as local device time).
@@ -399,19 +401,31 @@ literally, not just a verbal recap.
   asked for this without realizing it existed; verified live, no code change needed. Also
   checked: Safe Pick's directions text was already adequate.
 
-## Not done yet
-- **Commissioner views are still visually plain** — round 3 covered every player-facing section
-  Jay flagged; Commissioner mode (password-gated, only Jay uses it) hasn't had the same design
-  pass. Worth asking whether that even needs the same treatment, or whether "boring but
-  functional" is fine there since it's power-user tooling, not the family-facing experience.
-- **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
-  `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
-  redraft feature from the family, so building the toggle now would be inert.
-- **Milestone 6 hardening — both halves now DONE.** Concurrent-write test and the real-device
-  offline test both passed pre-reset (against test data) — no need to redo unless something
-  material changes.
-- **Player bios beyond the 4 shipped fields** — occupation wasn't sourced; revisit only if Jay
-  specifically wants to chase it down further.
+## Punch list cleared out — same evening, 2026-07-29 (`0145a21`, `2e03116`)
+
+Jay told me directly to stop asking "what's next" each time and just build through the remaining
+list myself until it was empty. Both remaining items are now done:
+
+- **Redraft-twist reveal toggle — built, turned out to be a real gap, not busywork.** The
+  "deferred, no consumer yet" reasoning from earlier notes was stale: My Roster's self-service
+  weekly redraft UI (turn indicators, "waiting on X's pick") was already showing the moment Week 2
+  opened, which would have spoiled the season's one twist before Jay's planned reveal right after
+  Episode 1. Added a Commissioner-only "Reveal Redraft Twist to Family" toggle (confirm-gated,
+  same pattern as Freeze Rosters) that flips `meta.redraftTwistRevealed`. Until flipped, My Roster
+  shows a neutral "Your Roster" view with no hint of the mechanic. The preseason draft's
+  self-service picking is untouched — not part of the twist. Verified against a real Gist: a
+  secretly-open Week 2 redraft leaked nothing pre-reveal, the real button correctly flipped the
+  flag, the real turn-based UI appeared immediately after.
+- **Commissioner panel visual design pass** — deliberately lighter-touch than the player-facing
+  rounds (function-first, Jay-only, used during live fast-moving events where scan speed beats
+  photo-card richness). Grouped each sub-section into a distinct panel for scannability, and gave
+  the destructive Seed Initial Data button a red danger color instead of matching every routine
+  blue button — a real safety improvement given what that button does. A console error surfaced
+  during verification (`board: []` test fixture, not a real app bug — `buildDraftBoard` never
+  actually returns an empty array) was traced and ruled out before shipping.
+
+**The "not done yet" list is now empty.** Nothing outstanding — waiting on Jay to raise the next
+thing.
 
 ## Key decisions locked in (don't re-litigate)
 
