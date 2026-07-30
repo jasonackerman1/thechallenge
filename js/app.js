@@ -356,8 +356,14 @@ async function runMutation(mutate) {
   if (!creds) return setStatus('Connect first.', true);
   setStatus('Saving...');
   try {
-    await commitMutation(creds.token, creds.gistId, mutate);
-    await loadAndRender(creds.token, creds.gistId);
+    // commitMutation already fetches fresh, writes, and re-fetches to confirm the write landed
+    // — its return value IS the confirmed state, so rendering it directly (instead of calling
+    // loadAndRender, which would fetch that same state a third time) saves a full extra Gist API
+    // request on every single successful save.
+    const newState = await commitMutation(creds.token, creds.gistId, mutate);
+    saveCachedState(newState);
+    render(newState);
+    setStatus(`Synced ${new Date().toLocaleTimeString()}`);
   } catch (err) {
     setStatus(`Save failed: ${err.message}`, true);
   }
