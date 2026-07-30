@@ -337,7 +337,8 @@
 
     /* Safe Pick specific states — layered on top of the base card via extraClass, so they
        override the team-color glow (the outcome matters more here than the team). */
-    .cast-card.sp-success { background: linear-gradient(165deg, #1baf7a, var(--bg-panel) 65%) !important; box-shadow: 0 0 20px rgba(27,175,122,0.4) !important; }
+    .cast-card.sp-success { background: var(--bg-panel) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.5) !important; }
+    .cast-card.sp-success .card-inner img { filter: grayscale(0.85) brightness(0.55); }
     .cast-card.sp-success .points-badge { background: linear-gradient(135deg, #1baf7a, #0d8a5c); }
     .cast-card.sp-success .status-bar { color: #1baf7a; }
     .cast-card.sp-miss { background: var(--bg-panel) !important; box-shadow: 0 6px 18px rgba(0,0,0,0.5) !important; }
