@@ -1,33 +1,99 @@
-# Project Status — updated 2026-07-30 (session paused for the night ~3:45am ET)
+# Project Status — updated 2026-07-30 (pre-share readiness pass, evening)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**THE REAL SEASON IS LIVE and Jay is mid-testing on it.** He's gone through pre-draft, the real
-preseason draft, and scored Episode 1 on his actual live Gist. **He has NOT yet clicked "Reveal
-Redraft Twist"** — that's his own next move, still pending. Every mutation on the live Gist is
-real family data now, not test data.
+**THE REAL SEASON IS LIVE. Twist has been revealed.** Jay has been through pre-draft, the real
+preseason draft, Episode 1 scoring, and has hit "Reveal Redraft Twist" — now doing his own
+end-to-end simulation pass through the rest of the season on his real Gist to confirm everything
+holds up before handing the app to the other 5 managers. Every mutation on the live Gist is real
+family data now, not test data.
 
-**Git status: clean and pushed.** Commit `a928615` — cut a redundant Gist API request per save —
-on top of `509ac61` (Season Status banner above the Leaderboard), `3d0e355` (confessional minutes
-replaced with a count + most-confessionals bonus), `da6eaea`/`5678cf2` (status doc updates),
-`2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal toggle),
-`aea0820` (Cast Browser directions + Winter Circle dropdown labels), `7582e5a` (fixed a
-Commissioner-section bootstrap lockout), `e613460` (Winter Circle rename/reorder + Commissioner
-gating), `75cd9d7` (preseason draft self-service picking), `6985e17` (Safe Pick reverted to
-dropdown+Submit), `c2d2406` (Preseason Mode + cast bio modal + denser Safe Pick cards), `a32746a`
-(Jay's own commit), `7bf13a9` (background color pass), `9c87f47` (GitHub Pages enabled), `9dbc874`
-(PWA shell), `0bbb209` (readability refactor), and Milestone 4 (`e85f112`). No local uncommitted
-changes, no untracked files, all on `origin/main`.
+**Git status: clean and pushed.** Commit `a4eb156` — Safe Pick hit cards now grey out like every
+other locked-out state (see below) — on top of `5c1013f` (pre-share readiness pass: Refresh
+button + auto-refresh, offline retry, multi-episode reopen, iPad orientation unlock — see below),
+`5fa98d1`/`a928615`/`509ac61`/`3d0e355`/`da6eaea` (confessional-count rework, Season Status
+banner, a cut Gist API request, status doc updates), `2e03116` (Commissioner panel visual design
+pass), `0145a21` (redraft-twist reveal toggle), and everything before that (PWA shell, Milestone
+4, etc. — see history further below). No local uncommitted changes, no untracked files, all on
+`origin/main`.
 
-**GitHub API rate limit note:** Jay's real account hit GitHub's 5,000 req/hour ceiling during
-testing tonight — very likely because a scratch Gist token used earlier in this same session for
-automated verification was generated from his own account, and GitHub rate-limits per-account, not
-per-token, so heavy automated testing shared the same budget as his real usage. No data was lost;
-the limit resets on a rolling hourly window and should already be clear by the time this resumes.
-Also fixed a genuine inefficiency found while investigating: every save now makes 3 Gist API
-requests instead of 4 (see `a928615` below).
+**GitHub API rate limit note — hit TWICE now, second time mid-live-simulation.** First hit
+2026-07-29/30 during automated testing (see below); recurred 2026-07-30 while Jay was running his
+own live simulation pass post-twist-reveal, this time actually blocking him mid-task rather than
+just being a background annoyance. Same root cause both times: heavy automated verification against
+a token tied to Jay's real account shares that account's 5,000 req/hour budget with his real usage.
+No data lost either time, resets on a rolling hourly window. **Going forward: default to NOT
+running rounds of automated testing against Jay's real account token while he might be actively
+using the live app in the same rough window** — this is now a known recurring failure mode, not a
+one-off. The mocked-Gist Playwright pattern (route-intercept `api.github.com`, a fixture built from
+the app's own `seed.js`/`draft.js`, zero real requests) used for the pre-share readiness pass below
+is the template to reuse instead whenever verification is actually needed.
+
+## Pre-share readiness pass — 2026-07-30 (`5c1013f`, `a4eb156`)
+
+Jay asked directly: is it time to share with the family, any gaps, do we need more work? Did a
+real pass over the live codebase (not just memory) to check what's actually built vs. only
+planned. Core draft/scoring engine held up; found and fixed 4 real gaps plus one visual bug Jay
+caught after testing:
+
+1. **No manual refresh for non-commissioner managers.** The only "Force Reload" button lived
+   inside the Commissioner password-gate; everyone else only got fresh state on page load or
+   after their own mutation — no polling, no refresh-on-resume. A backgrounded/resumed installed
+   PWA could sit stale indefinitely with no way to know it's your redraft turn. **Fixed:** a
+   visible Refresh button for everyone, plus silent auto-refresh on `visibilitychange` and a 60s
+   foreground poll — both skip themselves while a form control has focus or Commissioner is
+   unlocked, since every view re-renders via wholesale `innerHTML` and a mistimed auto-refresh
+   would otherwise silently wipe a half-filled form. Jay tested this live on localhost.
+2. **Offline pending-write queue was dead code.** `state.js` had `enqueuePendingWrite`/
+   `clearPendingWrite` from the original plan, but nothing ever called them. Closures can't be
+   persisted to localStorage, so a true durable queue wasn't feasible without a bigger refactor;
+   instead scoped correctly as an in-memory retry — a genuine connectivity failure (`TypeError`,
+   not a rejected pick, not a bad HTTP response) holds the mutation in memory and replays it
+   automatically on the next successful connectivity signal. Removed the dead scaffolding rather
+   than leave it unused. Jay chose to trust the automated verification on this one rather than test
+   it live himself ("everyone will be home on wifi").
+3. **"Reopen episode" could only ever reopen the single most recent finalized episode**, and only
+   when no newer episode had been started. Root cause was structural — `getCurrentEpisode` was
+   "the last array item, if unfinalized," coupling the edited episode to array position.
+   **Fixed properly:** redefined it as "whichever episode isn't finalized" (position-independent),
+   added a dropdown to reopen any finalized episode, and the edit form now distinguishes
+   "(in progress)" from "(reopened for corrections)" with a reminder banner. Confirmed via
+   `scoring.js`'s `finalizedWeeks()` that reopening a middle episode correctly drops just that
+   episode's points from the leaderboard while later ones keep counting. Known, disclosed
+   limitation: doesn't retroactively recompute weekly redraft orders that already happened
+   downstream of a correction — the confirm dialog says so. Jay tested this live and confirmed it.
+4. **Manifest force-locked orientation to portrait**, untested on any device but Jay's iPhone.
+   Jay confirmed the whole family plays on iPhone/iPad — no Android testing needed, but the
+   portrait lock would have fought iPad users rotating to landscape. Removed the lock once the
+   CSS was confirmed already responsive up to tablet/desktop widths.
+5. **Safe Pick "hit" cards still looked bright/active/tappable** (`a4eb156`, found after Jay tried
+   the app live) — only "miss" and "eliminated" got the dimmed/greyscale treatment, even though a
+   hit is equally locked out (used once per manager all season). Fixed `.cast-card.sp-success` to
+   use the same dim background + greyscale image as `.sp-miss`, keeping only the green
+   badge/status text as the "correct pick" signal.
+
+**Verification method — mocked-Gist Playwright, zero real GitHub API cost.** Given the rate-limit
+recurrence above, none of this touched Jay's real account/token for automated testing. Built a
+synthetic fixture via Node (importing the app's own `seed.js`/`draft.js` so it's structurally
+valid), served the real repo locally, and used Playwright with full `page.route()` interception of
+`https://api.github.com/**` — every request goes to an in-memory mock. 17/17 functional checks
+passed plus a visual screenshot check for the Safe Pick fix. One harness bug caught along the way:
+the mock's GET handler re-serialized state with different JSON formatting than the app's own
+`writeState`, which made `commitMutation`'s write-confirmation check spuriously fail — fixed by
+having the mock replay the exact raw string it was given instead of re-serializing.
+
+## Two scoring rules confirmed with Jay — 2026-07-30
+
+1. **Survived-the-Week (+5) is withheld starting the episode someone is eliminated**, not just
+   future episodes — other same-episode points (event points, the confessional bonus) are not
+   withheld, only the survival bonus specifically excludes it. Confirmed correct after walking
+   through the actual code path with a concrete example.
+2. **Roster ownership is strictly per-week, not season-long** — `getRosterForWeek` looks up that
+   week's own draft results only, so a cast member's points always go to whoever drafted them
+   *that specific week*, with no season-long carryover if they move to a different manager in a
+   later redraft. Confirmed correct, no code change.
 
 **Draft night is Saturday, Aug 1, 2026, 8:30pm** — confirmed by Jay, used as the Preseason Mode
 countdown target (`js/views/player.js`'s `DRAFT_COUNTDOWN_TARGET`, parsed as local device time).
