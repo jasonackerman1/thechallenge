@@ -385,9 +385,9 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
     2nd +${PRESEASON_BONUS_POINTS.second}, 3rd +${PRESEASON_BONUS_POINTS.third}. Locks the moment Episode 1 is finalized.</p>
     ${existingPick ? `<p><strong>Current pick:</strong></p>${bonusPickCardsHtml(state, existingPick)}` : ''}
     <div class="control-row">
-      <select id="bonus-first-select">${castOptions(existingPick?.first)}</select>
-      <select id="bonus-second-select">${castOptions(existingPick?.second)}</select>
-      <select id="bonus-third-select">${castOptions(existingPick?.third)}</select>
+      <label>1st Place<select id="bonus-first-select">${castOptions(existingPick?.first)}</select></label>
+      <label>2nd Place<select id="bonus-second-select">${castOptions(existingPick?.second)}</select></label>
+      <label>3rd Place<select id="bonus-third-select">${castOptions(existingPick?.third)}</select></label>
     </div>
     <button id="bonus-submit-btn">${existingPick ? 'Change Pick' : 'Submit Winter Circle Pick'}</button>
   `;
@@ -461,7 +461,11 @@ export function renderCastBrowser(container, state, { onCardClick } = {}) {
     })
     .join('');
 
-  container.innerHTML = sectionsHtml;
+  container.innerHTML = `
+    <p>Browse the full cast by team. Tap a card for their bio and Challenge history. The number
+    on each card is their season point total so far. Eliminated cast are grayed out.</p>
+    ${sectionsHtml}
+  `;
 
   if (onCardClick) {
     container.querySelectorAll('.cast-card').forEach((card) => {
