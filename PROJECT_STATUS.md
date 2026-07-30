@@ -1,4 +1,4 @@
-# Project Status — updated 2026-07-30 (pre-share readiness pass, evening)
+# Project Status — updated 2026-07-30 (icon replaced, evening/night)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -10,14 +10,39 @@ end-to-end simulation pass through the rest of the season on his real Gist to co
 holds up before handing the app to the other 5 managers. Every mutation on the live Gist is real
 family data now, not test data.
 
-**Git status: clean and pushed.** Commit `a4eb156` — Safe Pick hit cards now grey out like every
-other locked-out state (see below) — on top of `5c1013f` (pre-share readiness pass: Refresh
-button + auto-refresh, offline retry, multi-episode reopen, iPad orientation unlock — see below),
-`5fa98d1`/`a928615`/`509ac61`/`3d0e355`/`da6eaea` (confessional-count rework, Season Status
-banner, a cut Gist API request, status doc updates), `2e03116` (Commissioner panel visual design
-pass), `0145a21` (redraft-twist reveal toggle), and everything before that (PWA shell, Milestone
-4, etc. — see history further below). No local uncommitted changes, no untracked files, all on
-`origin/main`.
+**Git status: clean and pushed.** Commit `664fe64` — app icon replaced with the real biohazard
+symbol (see below) — on top of `a4eb156` (Safe Pick hit cards now grey out like every other
+locked-out state), `5c1013f` (pre-share readiness pass: Refresh button + auto-refresh, offline
+retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509ac61`/`3d0e355`/
+`da6eaea` (confessional-count rework, Season Status banner, a cut Gist API request, status doc
+updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
+toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below).
+No local uncommitted changes, no untracked files, all on `origin/main`.
+
+## App icon replaced — 2026-07-30 (`664fe64`)
+
+Jay wanted a better icon than the old C42 monogram. Went through three concepts: a hand-drawn
+chrome dagger, then a hand-approximated grungy biohazard trefoil (Jay: "use a grungy biohazard
+logo") — both reasonable, but once Jay supplied his own clean reference image and said "that's
+terrible, use my reference, make it vector, one color, dark blue background," hand-tuning circle
+math to match it by eye was the wrong approach. Instead: found the actual official public-domain
+biohazard symbol SVG on Wikimedia Commons and rendered it exactly (no local SVG rasterizer was
+installed, so rendered it precisely by loading the raw SVG in a minimal HTML page and
+screenshotting it via headless Chromium at high resolution) — pixel-perfect match to Jay's
+reference, not an approximation. One bug caught mid-process: an injected CSS rule meant to force
+a fill color ended up overriding the SVG's internal `<mask>` background rect too, inverting the
+whole shape into three disconnected lens shapes — fixed by rendering the SVG completely
+unmodified and only recoloring pixels in the final raster afterward. Final icon: solid white
+symbol on the app's actual `--bg-void` (`#0a0d18`), crisp at every size down to real 60px
+home-screen size — replaced all 5 icon files in place (same filenames, no manifest/sw.js changes
+needed).
+
+**Lesson for next time a hand-drawn approximation of a real/well-known symbol isn't landing:
+look for the authoritative source (official spec, public-domain vector, a real supplied asset)
+before iterating on guessed proportions — faster and strictly better than eyeballing it closer.**
+Also: draft preview images need to live inside the actual project folder (not an external
+scratchpad) if Jay needs to open them in his own editor/Finder — a `icons/_drafts/` folder
+(deleted before the final commit) fixed this after he couldn't find the first round of previews.
 
 **GitHub API rate limit note — hit TWICE now, second time mid-live-simulation.** First hit
 2026-07-29/30 during automated testing (see below); recurred 2026-07-30 while Jay was running his
