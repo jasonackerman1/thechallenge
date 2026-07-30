@@ -39,6 +39,7 @@ const els = {
   status: document.getElementById('status'),
   seedButton: document.getElementById('seed-button'),
   reloadButton: document.getElementById('reload-button'),
+  refreshButton: document.getElementById('refresh-button'),
   commissionerSection: document.getElementById('commissioner-section'),
   unlockForm: document.getElementById('unlock-form'),
   passwordInput: document.getElementById('password-input'),
@@ -319,9 +320,11 @@ function renderEpisode() {
         getCurrentEpisode(fresh).finalized = true;
         return fresh;
       }),
-    onUnfinalizeLastEpisode: () =>
+    onUnfinalizeEpisode: (episodeNumber) =>
       runMutation((fresh) => {
-        fresh.episodes[fresh.episodes.length - 1].finalized = false;
+        const target = fresh.episodes.find((e) => e.episodeNumber === episodeNumber);
+        if (!target) throw new Error(`Episode ${episodeNumber} not found.`);
+        target.finalized = false;
         return fresh;
       }),
   });
@@ -351,6 +354,28 @@ function renderDraft() {
   });
 }
 
+// A mutation that failed because the device is genuinely offline (not a rejected pick, not a bad
+// response) — kept in memory so it can be replayed automatically once connectivity returns.
+// In-memory only: closures can't be persisted to localStorage, so this doesn't survive a killed
+// or reloaded app. That covers the realistic case (a wifi/cell blip while the app stays open);
+// it does not cover force-quitting mid-submit, which just needs the pick resubmitted by hand.
+let queuedRetryMutate = null;
+
+function isConnectivityError(err) {
+  // fetch() throws a bare TypeError when it can't reach the network at all (offline, DNS
+  // failure, etc.) — a real HTTP response, even an error one, throws GistError instead, and a
+  // rejected pick throws a plain Error from inside `mutate`. Only TypeError (or the browser
+  // already reporting itself offline) means "retry once we're back online" is the right move.
+  return err instanceof TypeError || !navigator.onLine;
+}
+
+function flushQueuedRetry() {
+  if (!queuedRetryMutate) return;
+  const mutate = queuedRetryMutate;
+  queuedRetryMutate = null;
+  runMutation(mutate);
+}
+
 async function runMutation(mutate) {
   const creds = loadCredentials();
   if (!creds) return setStatus('Connect first.', true);
@@ -365,7 +390,46 @@ async function runMutation(mutate) {
     render(newState);
     setStatus(`Synced ${new Date().toLocaleTimeString()}`);
   } catch (err) {
-    setStatus(`Save failed: ${err.message}`, true);
+    if (isConnectivityError(err)) {
+      queuedRetryMutate = mutate;
+      setStatus("You're offline — this pick will save automatically once you're back online.", true);
+    } else {
+      setStatus(`Save failed: ${err.message}`, true);
+    }
+  }
+}
+
+const AUTO_REFRESH_MIN_INTERVAL_MS = 20000;
+const AUTO_REFRESH_POLL_MS = 60000;
+let lastAutoRefreshAt = 0;
+
+function hasFocusedFormControl() {
+  const tag = document.activeElement?.tagName;
+  return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+}
+
+/** Refreshes state from the Gist. `silent` (used for auto-refresh: on resume, on a 60s poll while
+ *  foregrounded) skips the refresh entirely rather than risk clobbering in-progress, unsubmitted
+ *  form input — every view re-renders via innerHTML, so a mistimed auto-refresh would silently
+ *  wipe a half-filled form. Guards: skip while a form control has focus, skip while Commissioner
+ *  is unlocked (Jay's own multi-step entry forms are the highest-stakes to clobber, and he already
+ *  has the manual Force Reload button), and throttle so resume + poll firing close together don't
+ *  double up. The manual Refresh button bypasses all of this — an explicit click always refreshes. */
+async function refreshFromGist({ silent = false } = {}) {
+  const creds = loadCredentials();
+  if (!creds) {
+    if (!silent) setStatus('Connect first.', true);
+    return;
+  }
+  if (silent) {
+    if (unlocked || hasFocusedFormControl()) return;
+    if (Date.now() - lastAutoRefreshAt < AUTO_REFRESH_MIN_INTERVAL_MS) return;
+    lastAutoRefreshAt = Date.now();
+  }
+  try {
+    await loadAndRender(creds.token, creds.gistId);
+  } catch (err) {
+    if (!silent) setStatus(err.message, true);
   }
 }
 
@@ -375,6 +439,7 @@ async function loadAndRender(token, gistId) {
   saveCachedState(state);
   render(state);
   setStatus(`Synced ${new Date().toLocaleTimeString()}`);
+  flushQueuedRetry();
   return state;
 }
 
@@ -431,6 +496,18 @@ function boot() {
     if (!creds) return setStatus('Connect first.', true);
     loadAndRender(creds.token, creds.gistId).catch((err) => setStatus(err.message, true));
   });
+
+  els.refreshButton.addEventListener('click', () => refreshFromGist());
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') refreshFromGist({ silent: true });
+  });
+
+  setInterval(() => {
+    if (document.visibilityState === 'visible') refreshFromGist({ silent: true });
+  }, AUTO_REFRESH_POLL_MS);
+
+  window.addEventListener('online', flushQueuedRetry);
 
   els.unlockForm.addEventListener('submit', async (e) => {
     e.preventDefault();

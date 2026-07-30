@@ -268,10 +268,12 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
   attachTwistListener(container, state, onToggleTwistRevealed);
 }
 
-/** The episode currently being entered: the last one in the array, if it isn't finalized yet. */
+/** The episode currently being entered: whichever one isn't finalized yet. Normally that's
+ *  the last episode (freshly started), but reopening an older, already-corrected episode for
+ *  corrections (see onUnfinalizeEpisode) also surfaces it here — there's only ever at most one
+ *  unfinalized episode at a time, by construction (reopening is only offered when none is open). */
 export function getCurrentEpisode(state) {
-  const last = state.episodes[state.episodes.length - 1];
-  return last && !last.finalized ? last : null;
+  return state.episodes.find((e) => !e.finalized) ?? null;
 }
 
 export function nextEpisodeNumber(state) {
@@ -314,38 +316,53 @@ export function renderEpisodeEntry(
     onRemoveScoringEvent,
     onSaveEliminations,
     onFinalizeEpisode,
-    onUnfinalizeLastEpisode,
+    onUnfinalizeEpisode,
   }
 ) {
   const episode = getCurrentEpisode(state);
 
   if (!episode) {
     const n = nextEpisodeNumber(state);
-    const last = state.episodes[state.episodes.length - 1];
+    const finalized = state.episodes.filter((e) => e.finalized);
     const ready = rostersReadyForEpisode(state, n);
     const startButtonHtml = ready
       ? `<button id="start-episode-btn">Start Episode ${n}</button>`
       : `<p style="color:var(--neon-blue, #1081f5);">Episode ${n} can't start yet &mdash; ${
           n === 1 ? 'finish the preseason draft' : `finish the Week ${n} redraft`
         } first.</p>`;
+    const reopenOptionsHtml = finalized
+      .map((e) => `<option value="${e.episodeNumber}">Episode ${e.episodeNumber}</option>`)
+      .join('');
     container.innerHTML = `
       <p>Ready to start Episode ${n}.</p>
       ${startButtonHtml}
-      ${last ? `<button id="unfinalize-btn" style="background:#7a2020;">Reopen Episode ${last.episodeNumber} for Corrections</button>` : ''}
+      ${
+        finalized.length
+          ? `<div class="control-row">
+              <select id="reopen-episode-select">${reopenOptionsHtml}</select>
+              <button id="unfinalize-btn" style="background:#7a2020;">Reopen for Corrections</button>
+            </div>`
+          : ''
+      }
       <h4>Finalized Episodes</h4>
       ${finalizedEpisodesHtml(state)}
     `;
     if (ready) {
       container.querySelector('#start-episode-btn').addEventListener('click', () => onStartEpisode(n));
     }
-    if (last) {
+    if (finalized.length) {
       container.querySelector('#unfinalize-btn').addEventListener('click', () => {
+        const episodeNumber = Number(container.querySelector('#reopen-episode-select').value);
+        const isMostRecent = episodeNumber === finalized[finalized.length - 1].episodeNumber;
+        const warning = isMostRecent
+          ? ''
+          : ` This episode has newer finalized episodes after it — any weekly redraft order computed since then already happened and won't be recomputed, even if this correction changes the standings.`;
         if (
           confirm(
-            `Reopen Episode ${last.episodeNumber}? It will drop off the leaderboard until you finalize it again, and Episode ${n} won't be startable until then.`
+            `Reopen Episode ${episodeNumber}? It will drop off the leaderboard until you finalize it again, and no new episode can start until then.${warning}`
           )
         ) {
-          onUnfinalizeLastEpisode();
+          onUnfinalizeEpisode(episodeNumber);
         }
       });
     }
@@ -391,8 +408,10 @@ export function renderEpisodeEntry(
     ? episode.eliminations.map((e) => castName(state, e.castId)).join(', ')
     : '(none saved yet)';
 
+  const isReopened = state.episodes.some((e) => e.finalized && e.episodeNumber > episode.episodeNumber);
   container.innerHTML = `
-    <h3>Episode ${episode.episodeNumber} (in progress)</h3>
+    <h3>Episode ${episode.episodeNumber} ${isReopened ? '(reopened for corrections)' : '(in progress)'}</h3>
+    ${isReopened ? `<p style="color:var(--neon-red, #e21e15);">This episode has already-finalized episodes after it. Don't forget to finalize it again when you're done.</p>` : ''}
 
     <h4>Scoring Events</h4>
     <ul>${eventsList}</ul>

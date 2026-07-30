@@ -481,7 +481,10 @@
     <button type="submit">Connect</button>
   </form>
 
-  <div id="status"></div>
+  <div class="sync-row" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div id="status" style="flex:1;"></div>
+    <button id="refresh-button" type="button" style="width:auto; margin:0; padding:8px 16px; font-size:0.85rem;">&#8635; Refresh</button>
+  </div>
 
   <div id="countdown-container" style="display:none;"></div>
   <div id="season-status-container"></div>
