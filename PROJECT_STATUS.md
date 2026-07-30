@@ -1,15 +1,23 @@
-# Project Status — updated 2026-07-29
+# Project Status — updated 2026-07-29 (evening session)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**Git status: clean and pushed.** Commit `7bf13a9` — final background color pass — on top of
-`d78d441`/`9b94023`/`9bf9d8e` (the background color iteration, see below), `9c87f47` (GitHub
-Pages enabled + `.nojekyll`), `9dbc874` (PWA shell: manifest, service worker, real logo, generated
-icons + identity/admin UI hardening), `0bbb209` (readability refactor), and the Milestone 4
-commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local uncommitted changes as
-of this checkpoint (one untracked, unaddressed folder remains — see below).
+**Git status: clean and pushed.** Commit `e613460` — Winter Circle rename/reorder + Commissioner
+gating (see "Evening session" below) — on top of `75cd9d7` (preseason draft self-service
+picking), `6985e17` (Safe Pick reverted to dropdown+Submit), `c2d2406` (Preseason Mode + cast bio
+modal + denser Safe Pick cards), `a32746a` (Jay's own commit: `images/reference/` + status file),
+`7bf13a9` (final background color pass), `9c87f47` (GitHub Pages enabled), `9dbc874` (PWA shell),
+`0bbb209` (readability refactor), and the Milestone 4 commit `e85f112` (Safe Pick, Cast Browser,
+Preseason Bonus Pick). No local uncommitted changes, no untracked files, all on `origin/main`.
+
+**Draft night is Saturday, Aug 1, 2026, 8:30pm** — confirmed by Jay, used as the Preseason Mode
+countdown target (`js/views/player.js`'s `DRAFT_COUNTDOWN_TARGET`, parsed as local device time).
+
+**Season reset — deliberately NOT done yet.** Jay wants to keep testing/polishing on the existing
+mid-season test data before wiping the Gist for the real season. Don't reset without him
+explicitly asking for it.
 
 **Live URL: https://jasonackerman1.github.io/thechallenge/** — GitHub Pages wasn't actually
 enabled before this (`has_pages: false` via the API); enabled it serving from `main`/root, added
@@ -296,11 +304,68 @@ cover) and asking for a direct comparison against the app's look and feel.**
   for this kind of "does it match the reference" ask; only reach for a gradient if he asks for
   one directly.
 
+## Evening session — 2026-07-29 (same day, after the brand/color pass above)
+
+Jay's framing for this whole session: get the app ready to hand to the family before Saturday's
+draft, ideally tonight. Everything below is built, live-verified, committed, and pushed.
+
+- **Preseason Mode (`c2d2406`).** Before the commissioner has ever run the preseason draft
+  (`!state.drafts.preseason`), the player view hides Leaderboard/My Roster/Safe Pick entirely and
+  leads with a countdown to draft night (`renderCountdown`, ticks live, targets Aug 1 8:30pm
+  local time) plus Cast Browser forced open (normally closed-by-default). Winter Circle (see
+  rename below) stays visible since it's genuinely usable pre-draft. Verified live both directions
+  (no-draft-yet state and draft-already-started state) with zero console errors.
+- **Cast bio modal (`c2d2406`), new `js/bios.js`.** Tapping a Cast Browser card opens a modal:
+  age, hometown, origin show, Challenge-season history, and a storyline blurb, cross-referenced
+  from two independent public sources (bracketology.tv for the structured fields, goldderby.com
+  for the blurb) rather than trusting one — matched against every `seed.js` slug, no gaps. No
+  occupation field (neither working source had it; a third, TVInsider, 403'd). Scoped to Cast
+  Browser only — Safe Pick and My Roster reuse the same card markup but tapping those already
+  submits/selects something, so a bio-modal trigger there would collide.
+- **Safe Pick reverted from tap-to-submit back to dropdown + Submit (`6985e17`).** Jay's concern:
+  a stray tap on the card grid submitted a pick immediately with zero confirmation. The card grid
+  stays as a visual reference (dimmed eliminated, hit/miss coloring, chosen outline) but is no
+  longer clickable — only the dropdown + Submit button actually commits, same two-step pattern as
+  My Roster. (The card density increase from earlier in the day — 4/5/8 columns — is unaffected.)
+- **Concurrent-write test, run against a real (scratch, since-revoked) Gist.** Two races: (1) the
+  same manager submitting two simultaneous picks for the same slot — exactly one landed, the loser
+  got the clean "not your turn anymore" error, final state stayed valid JSON; (2) the real
+  next-in-line manager vs. an "impostor" firing at the same instant — real manager succeeded,
+  impostor cleanly rejected. **One non-blocking observation:** the losing request takes ~3-3.6
+  seconds to surface its error (the built-in 3-retry backoff working as designed) — a real UX
+  latency point if it ever bothers Jay in practice, not a correctness bug.
+- **Preseason draft self-service picking (`75cd9d7`) — the big one.** Jay had assumed the
+  preseason draft worked like the weekly redraft (pick from your own device on your turn); it
+  didn't — Milestone 3 built it commissioner-only, before Milestone 4 introduced self-service for
+  weekly redraft, and nobody revisited preseason afterward. Fixed: My Roster now shows a real
+  "It's your turn!" pick form for the preseason draft too, using the exact same turn-enforcement
+  pattern as weekly redraft (`flattenDraftBoard`, re-verified against fresh state inside the
+  mutation). **The Commissioner panel's manual preseason-draft entry stays as a backup** for
+  anyone who can't get to the app live — same dual-entry pattern weekly redraft already has, not
+  a replacement for it. Verified end-to-end against the real scratch Gist: clicked the actual
+  "Start Preseason Draft" button, confirmed the real shuffled round-1 order, confirmed the correct
+  manager saw the pick form while others saw "waiting on X," submitted a real pick through the UI,
+  confirmed turn correctly advanced.
+- **Snake vs. straight draft boards — confirmed still correct, untouched.** Preseason draft uses
+  a snake board (`buildDraftBoard`), weekly redraft uses straight (`buildStraightBoard`) — Jay
+  asked to confirm this distinction was understood; it was, and the new self-service picker is
+  agnostic to board shape (just flattens whatever board array it's given), so this didn't need
+  any change. See "Redraft mechanic" below for why they deliberately differ.
+- **"Preseason Bonus Pick" renamed to "Winter Circle" (`e613460`), display text only** — internal
+  names (`renderPreseasonBonusPick`, `PRESEASON_BONUS_POINTS`, `preseasonPicks` state field,
+  `bonus-pick-container` id) are unchanged, only user-facing copy in `index.html`/`player.js`/
+  `app.js`'s error message.
+- **Cast Browser moved above Winter Circle (`e613460`)** in page order.
+- **Commissioner section gated to Jay's identity only (`e613460`).** Previously the password
+  unlock form (and, once entered, the panel) was visible to every device regardless of identity —
+  just practically inaccessible without the password. Now the whole section (`<h2>Commissioner
+  </h2>` + unlock form + panel) is hidden entirely unless `currentManagerId === 'jay'`, checked
+  independently of the in-memory `unlocked` flag so switching identity away from Jay on the same
+  device hides it immediately even if it was previously unlocked in that session.
+
 ## Not done yet
-- **`images/reference/` folder is still untracked in git** (4 jpgs + a `.DS_Store`, added by Jay
-  for the brand comparison above). Flagged to him twice, no answer yet on whether to commit it
-  as ongoing brand reference or leave it out of the repo. Not blocking anything — just don't
-  silently commit or silently delete it either way.
+- **`images/reference/` folder** — resolved. Jay committed it himself (`a32746a`) as ongoing
+  brand reference; no longer an open question.
 - **Commissioner views are still visually plain** — round 3 covered every player-facing section
   Jay flagged; Commissioner mode (password-gated, only Jay uses it) hasn't had the same design
   pass. Worth asking whether that even needs the same treatment, or whether "boring but
@@ -308,10 +373,11 @@ cover) and asking for a direct comparison against the app's look and feel.**
 - **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
   `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
   redraft feature from the family, so building the toggle now would be inert.
-- Milestone 6 (hardening/deploy) still pending — deploy is now partially done (Pages is live),
-  but the concurrent-write test and a full offline test on a real device are still outstanding.
-- ~~Not yet tested on a real phone as an actually-installed PWA~~ — **done, confirmed by Jay
-  2026-07-29.** Milestone 5's PWA half is now fully verified, not just headless-checked.
+- **Milestone 6 hardening — concurrent-write test now DONE** (see above). Real-device offline
+  test is still outstanding, but lower priority since everyone will likely have signal during a
+  live draft/redraft.
+- **Player bios beyond the 4 shipped fields** — occupation wasn't sourced (see above); revisit
+  only if Jay specifically wants to chase it down further.
 
 ## Key decisions locked in (don't re-litigate)
 
