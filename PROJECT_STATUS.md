@@ -1,23 +1,26 @@
-# Project Status — updated 2026-07-29 (evening session)
+# Project Status — updated 2026-07-29 (evening session, post-reset)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**Git status: clean and pushed.** Commit `e613460` — Winter Circle rename/reorder + Commissioner
-gating (see "Evening session" below) — on top of `75cd9d7` (preseason draft self-service
-picking), `6985e17` (Safe Pick reverted to dropdown+Submit), `c2d2406` (Preseason Mode + cast bio
-modal + denser Safe Pick cards), `a32746a` (Jay's own commit: `images/reference/` + status file),
-`7bf13a9` (final background color pass), `9c87f47` (GitHub Pages enabled), `9dbc874` (PWA shell),
-`0bbb209` (readability refactor), and the Milestone 4 commit `e85f112` (Safe Pick, Cast Browser,
-Preseason Bonus Pick). No local uncommitted changes, no untracked files, all on `origin/main`.
+**THE REAL SEASON IS LIVE.** Jay reset his real Gist tonight (2026-07-29) via the real Seed
+Initial Data button. Preseason Mode confirmed working correctly on his real device. **Every
+mutation on the live Gist from this point forward is real family data — the old mid-season test
+data described elsewhere in this file no longer exists and should not be treated as current.**
+
+**Git status: clean and pushed.** Commit `aea0820` — Cast Browser directions + Winter Circle
+dropdown labels — on top of `7582e5a` (fixed a Commissioner-section bootstrap lockout found via a
+pre-reset double-check, see below), `e613460` (Winter Circle rename/reorder + Commissioner
+gating), `75cd9d7` (preseason draft self-service picking), `6985e17` (Safe Pick reverted to
+dropdown+Submit), `c2d2406` (Preseason Mode + cast bio modal + denser Safe Pick cards), `a32746a`
+(Jay's own commit: `images/reference/` + status file), `7bf13a9` (final background color pass),
+`9c87f47` (GitHub Pages enabled), `9dbc874` (PWA shell), `0bbb209` (readability refactor), and the
+Milestone 4 commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local uncommitted
+changes, no untracked files, all on `origin/main`.
 
 **Draft night is Saturday, Aug 1, 2026, 8:30pm** — confirmed by Jay, used as the Preseason Mode
 countdown target (`js/views/player.js`'s `DRAFT_COUNTDOWN_TARGET`, parsed as local device time).
-
-**Season reset — deliberately NOT done yet.** Jay wants to keep testing/polishing on the existing
-mid-season test data before wiping the Gist for the real season. Don't reset without him
-explicitly asking for it.
 
 **Live URL: https://jasonackerman1.github.io/thechallenge/** — GitHub Pages wasn't actually
 enabled before this (`has_pages: false` via the API); enabled it serving from `main`/root, added
@@ -363,9 +366,40 @@ draft, ideally tonight. Everything below is built, live-verified, committed, and
   independently of the in-memory `unlocked` flag so switching identity away from Jay on the same
   device hides it immediately even if it was previously unlocked in that session.
 
+## Pre-reset double-check, the reset itself, and post-reset polish — same evening, 2026-07-29
+
+Jay asked to "double check" everything before wiping his real Gist for the actual season — taken
+literally, not just a verbal recap.
+
+- **Found and fixed a real bug (`7582e5a`):** tracing the bootstrap code path (not just re-reading
+  the Commissioner-gating feature just built) revealed that a genuinely blank Gist would have no
+  way to reach the Seed button — `renderPlayerView` (which reveals Commissioner for Jay) never
+  runs until `state.managers` exists, but managers only come to exist via Seed, which lives inside
+  that same gated section. Didn't block Jay's actual reset (his Gist already had managers from
+  the test season) but would have broken any future from-scratch setup. Fixed: `render()` now
+  shows Commissioner whenever `state.managers` doesn't exist yet; `renderPlayerView`'s identity
+  gating takes over normally once real data exists.
+- **Full end-to-end verification against the REAL deployed site** (not localhost), using a
+  scratch Gist seeded to mirror Jay's actual starting condition (existing managers + known
+  password): real connect form → real unlock → real Seed button click → Preseason Mode confirmed
+  → bio modal → real Start Preseason Draft button → real shuffled first picker saw the
+  self-service form and submitted a real pick → Winter Circle/Cast Browser order confirmed →
+  Safe Pick confirmed dropdown-only → Commissioner confirmed Jay-only. **22/22 checks passed,
+  zero console errors**, before Jay reset his own Gist.
+- **Jay reset his real Gist.** Preseason Mode confirmed live and correct on his actual device:
+  countdown + Cast Browser only, everything else correctly hidden. The mid-season test data
+  described elsewhere in this file is gone — this is the real season now.
+- **Post-reset polish, same evening (`aea0820`):** Jay's first live reaction to Preseason Mode —
+  loved it, three small asks. Cast Browser had zero instructional text — added a short intro.
+  Winter Circle's three prediction dropdowns were unlabeled — added "1st Place"/"2nd Place"/"3rd
+  Place" labels (required a small CSS fix: `.control-row`'s responsive sizing targeted direct
+  `select`/`input` children, so wrapping selects in `<label>` needed `.control-row > label` added
+  to the same rule). Checked, not changed: the locked-state position labels under a submitted
+  Winter Circle pick were already built earlier the same evening (`bonusPickCardsHtml`) — Jay
+  asked for this without realizing it existed; verified live, no code change needed. Also
+  checked: Safe Pick's directions text was already adequate.
+
 ## Not done yet
-- **`images/reference/` folder** — resolved. Jay committed it himself (`a32746a`) as ongoing
-  brand reference; no longer an open question.
 - **Commissioner views are still visually plain** — round 3 covered every player-facing section
   Jay flagged; Commissioner mode (password-gated, only Jay uses it) hasn't had the same design
   pass. Worth asking whether that even needs the same treatment, or whether "boring but
@@ -373,11 +407,11 @@ draft, ideally tonight. Everything below is built, live-verified, committed, and
 - **Redraft-twist reveal toggle** — intentionally deferred. Nothing in the app reads
   `meta.redraftTwistRevealed` yet; it only matters once a player view exists to hide/reveal the
   redraft feature from the family, so building the toggle now would be inert.
-- **Milestone 6 hardening — concurrent-write test now DONE** (see above). Real-device offline
-  test is still outstanding, but lower priority since everyone will likely have signal during a
-  live draft/redraft.
-- **Player bios beyond the 4 shipped fields** — occupation wasn't sourced (see above); revisit
-  only if Jay specifically wants to chase it down further.
+- **Milestone 6 hardening — both halves now DONE.** Concurrent-write test and the real-device
+  offline test both passed pre-reset (against test data) — no need to redo unless something
+  material changes.
+- **Player bios beyond the 4 shipped fields** — occupation wasn't sourced; revisit only if Jay
+  specifically wants to chase it down further.
 
 ## Key decisions locked in (don't re-litigate)
 
