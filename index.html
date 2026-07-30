@@ -477,41 +477,43 @@
     <div id="safe-pick-container"></div>
   </details>
 
-  <details class="section">
-    <summary>Preseason Bonus Pick</summary>
-    <div id="bonus-pick-container"></div>
-  </details>
-
   <details id="cast-browser-section" class="section">
     <summary>Cast Browser</summary>
     <div id="cast-browser-container"></div>
   </details>
 
-  <h2>Commissioner</h2>
-  <form id="unlock-form">
-    <input id="password-input" type="password" autocomplete="off" placeholder="Commissioner password" />
-    <button type="submit">Unlock</button>
-  </form>
-  <div id="commissioner-panel" style="display:none;">
-    <h3>Data Sync</h3>
-    <p class="note">"Seed Initial Data" wipes the entire Gist and replaces it with a blank season
-    — only for setting up a brand-new season, never during one already in progress.</p>
-    <div class="actions">
-      <button id="seed-button" type="button">Seed Initial Data (wipes all data)</button>
-      <button id="reload-button" type="button">Force Reload from Gist</button>
+  <details class="section">
+    <summary>Winter Circle</summary>
+    <div id="bonus-pick-container"></div>
+  </details>
+
+  <div id="commissioner-section" style="display:none;">
+    <h2>Commissioner</h2>
+    <form id="unlock-form">
+      <input id="password-input" type="password" autocomplete="off" placeholder="Commissioner password" />
+      <button type="submit">Unlock</button>
+    </form>
+    <div id="commissioner-panel" style="display:none;">
+      <h3>Data Sync</h3>
+      <p class="note">"Seed Initial Data" wipes the entire Gist and replaces it with a blank season
+      — only for setting up a brand-new season, never during one already in progress.</p>
+      <div class="actions">
+        <button id="seed-button" type="button">Seed Initial Data (wipes all data)</button>
+        <button id="reload-button" type="button">Force Reload from Gist</button>
+      </div>
+
+      <h3>Preseason Draft</h3>
+      <div id="draft-container"></div>
+
+      <h3>Episode Entry</h3>
+      <div id="episode-container"></div>
+
+      <h3>Weekly Redraft</h3>
+      <div id="redraft-container"></div>
+
+      <h3>Final Challenge</h3>
+      <div id="final-challenge-container"></div>
     </div>
-
-    <h3>Preseason Draft</h3>
-    <div id="draft-container"></div>
-
-    <h3>Episode Entry</h3>
-    <div id="episode-container"></div>
-
-    <h3>Weekly Redraft</h3>
-    <div id="redraft-container"></div>
-
-    <h3>Final Challenge</h3>
-    <div id="final-challenge-container"></div>
   </div>
 
   <div id="identity-modal" class="modal-overlay" style="display:none;"></div>

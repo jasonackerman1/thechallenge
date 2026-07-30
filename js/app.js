@@ -38,6 +38,7 @@ const els = {
   status: document.getElementById('status'),
   seedButton: document.getElementById('seed-button'),
   reloadButton: document.getElementById('reload-button'),
+  commissionerSection: document.getElementById('commissioner-section'),
   unlockForm: document.getElementById('unlock-form'),
   passwordInput: document.getElementById('password-input'),
   commissionerPanel: document.getElementById('commissioner-panel'),
@@ -107,6 +108,10 @@ function renderPlayerView() {
   const preseasonMode = isPreseasonMode(currentState);
 
   renderIdentityIndicator(els.siteLogo, { onSwitch: openIdentityModal });
+
+  // Commissioner mode is Jay-only — hidden from every other identity's view entirely, not just
+  // practically gated behind the password (which stays as a second layer regardless).
+  els.commissionerSection.style.display = currentManagerId === 'jay' ? '' : 'none';
 
   els.countdownContainer.style.display = preseasonMode ? 'block' : 'none';
   els.leaderboardSection.style.display = preseasonMode ? 'none' : '';
@@ -188,7 +193,7 @@ function renderPlayerView() {
       runMutation((fresh) => {
         const managerId = loadPlayerIdentity();
         if (isPreseasonBonusPickLocked(fresh)) {
-          throw new Error('Preseason bonus picks are locked — Episode 1 has already been finalized.');
+          throw new Error('Winter Circle picks are locked — Episode 1 has already been finalized.');
         }
         const existing = fresh.preseasonPicks.find((p) => p.managerId === managerId);
         if (existing) {
