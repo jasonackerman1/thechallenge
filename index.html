@@ -98,6 +98,17 @@
       text-transform: uppercase;
       letter-spacing: 0.06em;
     }
+    /* Commissioner panel: function-first, power-user tooling (Jay only) — grouped into panels
+       so a long scroll during a live draft/episode-scoring session stays scannable, without
+       trying to match the photo-card richness of the player-facing views (a plain roster list
+       is more scannable than cards when entering picks quickly). */
+    .commish-block {
+      background: var(--bg-panel);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    .commish-block > h3:first-child { margin-top: 0; }
     p.note { color: var(--text-muted); font-size: 0.85rem; }
     form#setup-form, form#unlock-form {
       display: flex;
@@ -495,25 +506,35 @@
       <button type="submit">Unlock</button>
     </form>
     <div id="commissioner-panel" style="display:none;">
-      <h3>Data Sync</h3>
-      <p class="note">"Seed Initial Data" wipes the entire Gist and replaces it with a blank season
-      — only for setting up a brand-new season, never during one already in progress.</p>
-      <div class="actions">
-        <button id="seed-button" type="button">Seed Initial Data (wipes all data)</button>
-        <button id="reload-button" type="button">Force Reload from Gist</button>
+      <div class="commish-block">
+        <h3>Data Sync</h3>
+        <p class="note">"Seed Initial Data" wipes the entire Gist and replaces it with a blank season
+        — only for setting up a brand-new season, never during one already in progress.</p>
+        <div class="actions">
+          <button id="seed-button" type="button" style="background:#7a2020;">Seed Initial Data (wipes all data)</button>
+          <button id="reload-button" type="button">Force Reload from Gist</button>
+        </div>
       </div>
 
-      <h3>Preseason Draft</h3>
-      <div id="draft-container"></div>
+      <div class="commish-block">
+        <h3>Preseason Draft</h3>
+        <div id="draft-container"></div>
+      </div>
 
-      <h3>Episode Entry</h3>
-      <div id="episode-container"></div>
+      <div class="commish-block">
+        <h3>Episode Entry</h3>
+        <div id="episode-container"></div>
+      </div>
 
-      <h3>Weekly Redraft</h3>
-      <div id="redraft-container"></div>
+      <div class="commish-block">
+        <h3>Weekly Redraft</h3>
+        <div id="redraft-container"></div>
+      </div>
 
-      <h3>Final Challenge</h3>
-      <div id="final-challenge-container"></div>
+      <div class="commish-block">
+        <h3>Final Challenge</h3>
+        <div id="final-challenge-container"></div>
+      </div>
     </div>
   </div>
 
