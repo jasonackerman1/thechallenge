@@ -11,7 +11,7 @@ import {
   PRESEASON_BONUS_POINTS,
 } from '../scoring.js';
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete, TARGET_ROSTER_SIZE } from '../draft.js';
-import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber } from './commissioner.js';
+import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber, getCurrentEpisode, rostersReadyForEpisode } from './commissioner.js';
 import { managerName, castName, castNameWithGender, castCardHtml } from './shared.js';
 import { CAST_BIOS } from '../bios.js';
 
@@ -415,6 +415,53 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
     }
     onSubmit({ first, second, third });
   });
+}
+
+/** A single always-current sentence summarizing where the season stands right now — shown above
+ *  the Leaderboard so the family always has one clear place to check "what's happening / what's
+ *  next" instead of piecing it together from individual sections. Respects the same
+ *  twist-secrecy rule as My Roster (vague before Jay reveals the redraft twist, specific after).
+ *  Returns null (renders nothing) during phases already covered vividly elsewhere: Preseason
+ *  Mode has its own countdown, and the preseason/weekly draft's own live turn-based UI in My
+ *  Roster already shows who's up. */
+export function computeSeasonStatusText(state) {
+  if (
+    !state.drafts.preseason ||
+    !isDraftComplete(state.drafts.preseason.board, state.drafts.preseason.picks, state.cast.map((c) => c.id), new Set())
+  ) {
+    return null;
+  }
+  if (state.finalChallenge?.completed) {
+    return '\u{1F3C6} The season is over! Check the leaderboard for final results.';
+  }
+  if (state.meta.rosterFrozen) {
+    return 'Rosters are frozen for the rest of the season — no more redrafts. Watch for the Final Challenge!';
+  }
+  const currentEpisode = getCurrentEpisode(state);
+  if (currentEpisode) {
+    return `Episode ${currentEpisode.episodeNumber} is airing — the commissioner will score it once results are in.`;
+  }
+  if (state.episodes.length === 0) {
+    return 'The draft is complete — Episode 1 coming soon!';
+  }
+  const lastFinalized = state.episodes[state.episodes.length - 1];
+  if (!state.meta.redraftTwistRevealed) {
+    return `Episode ${lastFinalized.episodeNumber} is scored — stay tuned for what's next!`;
+  }
+  const currentWeek = getCurrentRedraftWeek(state);
+  if (currentWeek !== null) {
+    return `Week ${currentWeek} redraft is live — check My Roster if it's your turn!`;
+  }
+  const nextEp = nextEpisodeNumber(state);
+  if (rostersReadyForEpisode(state, nextEp)) {
+    return `Rosters are set for Week ${nextEp} — waiting on the commissioner to start Episode ${nextEp}.`;
+  }
+  return `Episode ${lastFinalized.episodeNumber} is scored — waiting on the commissioner to open the Week ${nextEp} redraft.`;
+}
+
+export function renderSeasonStatus(container, state) {
+  const text = computeSeasonStatusText(state);
+  container.innerHTML = text ? `<div class="season-status-banner">${text}</div>` : '';
 }
 
 /** Preseason Mode countdown to draft night. Target is a fixed real-world moment (Aug 1, 2026,

@@ -357,6 +357,17 @@
       .cast-grid { grid-template-columns: repeat(3, 1fr); }
     }
 
+    /* Always-current one-line season status, above the Leaderboard — "what's happening / what's
+       next," so nobody has to piece it together from individual sections' own messages. */
+    .season-status-banner {
+      background: var(--bg-panel);
+      border-left: 4px solid var(--neon-blue);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 12px 0 20px;
+      font-size: 0.9rem;
+    }
+
     /* Preseason Mode countdown — the first thing family members see before the draft has
        happened, replacing the normal Leaderboard/My Roster/Safe Pick sections which have
        nothing real to show yet. */
@@ -473,6 +484,7 @@
   <div id="status"></div>
 
   <div id="countdown-container" style="display:none;"></div>
+  <div id="season-status-container"></div>
 
   <div id="leaderboard-section">
     <h2>Leaderboard</h2>

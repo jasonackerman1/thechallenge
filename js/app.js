@@ -29,6 +29,7 @@ import {
   renderCastBrowser,
   renderCountdown,
   renderCastBioModal,
+  renderSeasonStatus,
 } from './views/player.js';
 
 const els = {
@@ -50,6 +51,7 @@ const els = {
   identityModal: document.getElementById('identity-modal'),
   castBioModal: document.getElementById('cast-bio-modal'),
   countdownContainer: document.getElementById('countdown-container'),
+  seasonStatusContainer: document.getElementById('season-status-container'),
   leaderboardSection: document.getElementById('leaderboard-section'),
   leaderboardContainer: document.getElementById('leaderboard-container'),
   myRosterSection: document.getElementById('my-roster-section'),
@@ -122,6 +124,8 @@ function renderPlayerView() {
   els.commissionerSection.style.display = currentManagerId === 'jay' ? '' : 'none';
 
   els.countdownContainer.style.display = preseasonMode ? 'block' : 'none';
+  els.seasonStatusContainer.style.display = preseasonMode ? 'none' : '';
+  if (!preseasonMode) renderSeasonStatus(els.seasonStatusContainer, currentState);
   els.leaderboardSection.style.display = preseasonMode ? 'none' : '';
   els.myRosterSection.style.display = preseasonMode ? 'none' : '';
   els.safePickSection.style.display = preseasonMode ? 'none' : '';
