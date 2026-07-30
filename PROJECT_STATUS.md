@@ -1,25 +1,33 @@
-# Project Status — updated 2026-07-29 (evening session, post-reset)
+# Project Status — updated 2026-07-30 (session paused for the night ~3:45am ET)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**THE REAL SEASON IS LIVE.** Jay reset his real Gist tonight (2026-07-29) via the real Seed
-Initial Data button. Preseason Mode confirmed working correctly on his real device. **Every
-mutation on the live Gist from this point forward is real family data — the old mid-season test
-data described elsewhere in this file no longer exists and should not be treated as current.**
+**THE REAL SEASON IS LIVE and Jay is mid-testing on it.** He's gone through pre-draft, the real
+preseason draft, and scored Episode 1 on his actual live Gist. **He has NOT yet clicked "Reveal
+Redraft Twist"** — that's his own next move, still pending. Every mutation on the live Gist is
+real family data now, not test data.
 
-**Git status: clean and pushed.** Commit `2e03116` — Commissioner panel visual design pass — on
-top of `0145a21` (redraft-twist reveal toggle), `aea0820` (Cast Browser directions + Winter Circle
-dropdown labels), `7582e5a` (fixed a Commissioner-section bootstrap lockout found via a pre-reset
-double-check), `e613460` (Winter Circle rename/reorder + Commissioner gating), `75cd9d7`
-(preseason draft self-service picking), `6985e17` (Safe Pick reverted to dropdown+Submit),
-`c2d2406` (Preseason Mode + cast bio modal + denser Safe Pick cards), `a32746a` (Jay's own commit:
-`images/reference/` + status file), `7bf13a9` (final background color pass), `9c87f47` (GitHub
-Pages enabled), `9dbc874` (PWA shell), `0bbb209` (readability refactor), and the Milestone 4
-commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local uncommitted changes, no
-untracked files, all on `origin/main`. **The punch list is now empty** — see the bottom of this
-file.
+**Git status: clean and pushed.** Commit `a928615` — cut a redundant Gist API request per save —
+on top of `509ac61` (Season Status banner above the Leaderboard), `3d0e355` (confessional minutes
+replaced with a count + most-confessionals bonus), `da6eaea`/`5678cf2` (status doc updates),
+`2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal toggle),
+`aea0820` (Cast Browser directions + Winter Circle dropdown labels), `7582e5a` (fixed a
+Commissioner-section bootstrap lockout), `e613460` (Winter Circle rename/reorder + Commissioner
+gating), `75cd9d7` (preseason draft self-service picking), `6985e17` (Safe Pick reverted to
+dropdown+Submit), `c2d2406` (Preseason Mode + cast bio modal + denser Safe Pick cards), `a32746a`
+(Jay's own commit), `7bf13a9` (background color pass), `9c87f47` (GitHub Pages enabled), `9dbc874`
+(PWA shell), `0bbb209` (readability refactor), and Milestone 4 (`e85f112`). No local uncommitted
+changes, no untracked files, all on `origin/main`.
+
+**GitHub API rate limit note:** Jay's real account hit GitHub's 5,000 req/hour ceiling during
+testing tonight — very likely because a scratch Gist token used earlier in this same session for
+automated verification was generated from his own account, and GitHub rate-limits per-account, not
+per-token, so heavy automated testing shared the same budget as his real usage. No data was lost;
+the limit resets on a rolling hourly window and should already be clear by the time this resumes.
+Also fixed a genuine inefficiency found while investigating: every save now makes 3 Gist API
+requests instead of 4 (see `a928615` below).
 
 **Draft night is Saturday, Aug 1, 2026, 8:30pm** — confirmed by Jay, used as the Preseason Mode
 countdown target (`js/views/player.js`'s `DRAFT_COUNTDOWN_TARGET`, parsed as local device time).
@@ -426,6 +434,31 @@ list myself until it was empty. Both remaining items are now done:
 
 **The "not done yet" list is now empty.** Nothing outstanding — waiting on Jay to raise the next
 thing.
+
+## Jay's real end-to-end testing session — same night, 2026-07-29 late / 2026-07-30 early
+
+Jay started testing the real live season: pre-draft, the actual preseason draft, and Episode 1
+scoring, all on his real Gist (not a test one). Three things came out of it, all shipped:
+
+- **Confessional minutes replaced with a count + most-confessionals bonus (`3d0e355`).** Jay
+  asked how confessional minutes were scored — checked the code and the plan doc directly and
+  confirmed they never scored anything at all, just a tracked stat. His fix: track a count
+  instead of minutes, +5 points to whoever has the most confessionals in an episode (ties all
+  get it). Implemented as just another `SCORING_EVENT_POINTS` entry (`CONFESSIONAL`, worth 0
+  direct points) logged through the existing Add Event UI — the old dedicated minutes
+  field/form/handler were removed outright.
+- **Season Status banner added above the Leaderboard (`509ac61`).** Jay noticed that after
+  Episode 1 was scored, nothing in the app said what was happening or what's next. Built a
+  single always-current status line covering 8 phases, respecting the same twist-secrecy rule as
+  My Roster (vague pre-reveal, specific after). **Jay had not yet hit "Reveal Redraft Twist" as
+  of this session — still his pending next move.**
+- **GitHub API rate limit hit and partially fixed (`a928615`).** Jay's real account hit the
+  5,000 req/hour ceiling — likely because the scratch Gist token from earlier this session drew
+  from the same account-level budget as his real usage (GitHub rate-limits per account, not
+  per-token). No data lost, resets automatically. Found and fixed a real inefficiency while
+  investigating: `runMutation` was fetching state a redundant third time after every successful
+  save; fixed to use `commitMutation`'s already-confirmed return value directly, cutting every
+  save from 4 API requests to 3.
 
 ## Key decisions locked in (don't re-litigate)
 
