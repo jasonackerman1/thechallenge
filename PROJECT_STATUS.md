@@ -4,10 +4,12 @@ Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture p
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**Git status: clean and pushed.** Commit `9c87f47` — enabled GitHub Pages + `.nojekyll` — on top
-of `9dbc874` (PWA shell: manifest, service worker, real logo, generated icons + identity/admin UI
-hardening), `0bbb209` (readability refactor), and the Milestone 4 commit `e85f112` (Safe Pick,
-Cast Browser, Preseason Bonus Pick). No local uncommitted changes as of this checkpoint.
+**Git status: clean and pushed.** Commit `7bf13a9` — final background color pass — on top of
+`d78d441`/`9b94023`/`9bf9d8e` (the background color iteration, see below), `9c87f47` (GitHub
+Pages enabled + `.nojekyll`), `9dbc874` (PWA shell: manifest, service worker, real logo, generated
+icons + identity/admin UI hardening), `0bbb209` (readability refactor), and the Milestone 4
+commit `e85f112` (Safe Pick, Cast Browser, Preseason Bonus Pick). No local uncommitted changes as
+of this checkpoint (one untracked, unaddressed folder remains — see below).
 
 **Live URL: https://jasonackerman1.github.io/thechallenge/** — GitHub Pages wasn't actually
 enabled before this (`has_pages: false` via the API); enabled it serving from `main`/root, added
@@ -265,7 +267,40 @@ screenshot:**
   alongside it since it's equally a power-user/debug action, not something the family needs. A
   warning line was added next to the Seed button as a reminder of what it actually does.
 
+**Brand/color alignment pass — 2026-07-29, prompted by Jay adding `images/reference/` (4 jpgs:
+the official key art poster + two logo/background shots + one stylistically-different fan-art
+cover) and asking for a direct comparison against the app's look and feel.**
+- Sampled actual pixel colors from all four references (median-cut quantization + targeted
+  crops on the logo glow) rather than eyeballing. Findings: the neon-blue/neon-red accent colors
+  already matched the real logo's glow accurately — no change needed there. The one real
+  mismatch was the flat solid `--bg-void` background; every reference showed a moody dusk
+  *gradient* (cool blue fading through warm plum/maroon), never a flat single dark color. The
+  4th reference (bold flat-color "CUTTHROAT 2" cover) was a different, more cartoonish style
+  than the photographic mood everything else (including the existing cast cards) shares, so it
+  was treated as a stylistic outlier and not pulled from.
+- **First attempt: a dusk-glow gradient behind the header, two iterations.** v1 was a
+  page-length-relative gradient — too subtle to register and barely visible without scrolling
+  most of the way down a long page. v2 was a proper `.hero` container (sized to its own content,
+  not a page-relative percentage or an arbitrary pixel height) with a more saturated navy-to-rose
+  gradient, ending cleanly right after the tagline. **Both were tried live and Jay rejected the
+  whole direction** — reverted `index.html` to be byte-identical to the pre-gradient commit
+  (`a7acae5`), confirmed via `git diff`.
+- **Second attempt: iterating a flat solid color instead, no gradient.** Landed via three rounds
+  of live-verified passes: `#0a0d18` (original, "too flat/black") &rarr; `#182444` (lighter navy,
+  "too light") &rarr; **final: `#11182e`, the midpoint between those two** (`--bg-panel` moved in
+  step, `#131a2c` &rarr; `#1a2441`, keeping panels a shade lighter than the page background for the
+  same elevation contrast as before). **Confirmed: "I agree this looks great now."**
+- Lesson worth remembering: Jay's brand/color feedback here converged fastest once gradients
+  were off the table entirely — a flat color he could react to in one or two rounds, versus a
+  gradient that took two builds and still got rejected outright. Default to a flat color first
+  for this kind of "does it match the reference" ask; only reach for a gradient if he asks for
+  one directly.
+
 ## Not done yet
+- **`images/reference/` folder is still untracked in git** (4 jpgs + a `.DS_Store`, added by Jay
+  for the brand comparison above). Flagged to him twice, no answer yet on whether to commit it
+  as ongoing brand reference or leave it out of the repo. Not blocking anything — just don't
+  silently commit or silently delete it either way.
 - **Commissioner views are still visually plain** — round 3 covered every player-facing section
   Jay flagged; Commissioner mode (password-gated, only Jay uses it) hasn't had the same design
   pass. Worth asking whether that even needs the same treatment, or whether "boring but
