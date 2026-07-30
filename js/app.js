@@ -135,6 +135,20 @@ function renderPlayerView() {
         draft.picks.push({ managerId, castId, round: nextSlot.round });
         return fresh;
       }),
+    onPreseasonPick: (castId) =>
+      runMutation((fresh) => {
+        const managerId = loadPlayerIdentity();
+        const draft = fresh.drafts.preseason;
+        if (!draft) throw new Error('The preseason draft has not started yet.');
+        const flat = flattenDraftBoard(draft.board);
+        const nextSlot = flat[draft.picks.length];
+        if (nextSlot.managerId !== managerId) {
+          throw new Error("It's not your turn anymore — someone else just picked. Refresh and try again.");
+        }
+        validatePick({ board: draft.board, picks: draft.picks, eliminatedCastIds: new Set(), managerId, castId });
+        draft.picks.push({ managerId, castId, round: nextSlot.round });
+        return fresh;
+      }),
   });
   renderSafePick(els.safePickContainer, currentState, currentManagerId, {
     onSubmitSafePick: (castId) =>

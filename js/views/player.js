@@ -10,7 +10,7 @@ import {
   SAFE_PICK_POINTS,
   PRESEASON_BONUS_POINTS,
 } from '../scoring.js';
-import { flattenDraftBoard, getAvailableCast, getRosterForManager, TARGET_ROSTER_SIZE } from '../draft.js';
+import { flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete, TARGET_ROSTER_SIZE } from '../draft.js';
 import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber } from './commissioner.js';
 import { managerName, castName, castNameWithGender, castCardHtml } from './shared.js';
 import { CAST_BIOS } from '../bios.js';
@@ -126,7 +126,19 @@ function rosterCardsHtml(state, castIds) {
   return `<div class="cast-grid">${cards}</div>`;
 }
 
-export function renderMyRoster(container, state, currentManagerId, { onPick }) {
+/** Non-blocking "aim for the other gender next" nudge, shared by both the preseason draft's
+ *  self-service picker and the weekly redraft's — same hint, same wording, two different draft
+ *  boards to read the roster-so-far from. */
+function genderHintHtml(state, myRoster) {
+  if (!state.cast[0]?.gender) return '';
+  const genders = myRoster.map((id) => state.cast.find((c) => c.id === id)?.gender);
+  const mCount = genders.filter((g) => g === 'M').length;
+  const fCount = genders.filter((g) => g === 'F').length;
+  const suggestion = mCount <= fCount ? 'a guy' : 'a girl';
+  return `<p style="font-size:0.85rem; color:var(--text-muted);">You have ${mCount} guy(s), ${fCount} girl(s) so far &mdash; aiming for ${suggestion} next (not required)</p>`;
+}
+
+export function renderMyRoster(container, state, currentManagerId, { onPick, onPreseasonPick }) {
   if (!currentManagerId) {
     container.innerHTML = `<p>Pick your identity above to see your roster.</p>`;
     return;
@@ -153,20 +165,11 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
       const available = getAvailableCast(state.cast.map((c) => c.id), eliminatedCastIds, draft.picks);
       const castOptions = available.map((id) => `<option value="${id}">${castNameWithGender(state, id)}</option>`).join('');
 
-      let genderHintHtml = '';
-      if (state.cast[0]?.gender) {
-        const genders = myRoster.map((id) => state.cast.find((c) => c.id === id)?.gender);
-        const mCount = genders.filter((g) => g === 'M').length;
-        const fCount = genders.filter((g) => g === 'F').length;
-        const suggestion = mCount <= fCount ? 'a guy' : 'a girl';
-        genderHintHtml = `<p style="font-size:0.85rem; color:var(--text-muted);">You have ${mCount} guy(s), ${fCount} girl(s) so far &mdash; aiming for ${suggestion} next (not required)</p>`;
-      }
-
       container.innerHTML = `
         <p><strong>It's your turn!</strong> Week ${currentWeek} redraft, round ${nextSlot.round + 1} of ${draft.board.length}.</p>
         <h4>Your Roster So Far</h4>
         ${rosterCardsHtml(state, myRoster)}
-        ${genderHintHtml}
+        ${genderHintHtml(state, myRoster)}
         <div class="control-row">
           <select id="my-pick-select">${castOptions}</select>
           <button id="my-pick-btn">Submit Pick</button>
@@ -178,6 +181,45 @@ export function renderMyRoster(container, state, currentManagerId, { onPick }) {
     } else {
       container.innerHTML = `
         <p>Week ${currentWeek} redraft is in progress &mdash; waiting on <strong>${managerName(state, nextSlot.managerId)}</strong>'s pick (round ${nextSlot.round + 1} of ${draft.board.length}).</p>
+        <h4>Your Roster So Far</h4>
+        ${rosterCardsHtml(state, myRoster)}
+      `;
+    }
+    return;
+  }
+
+  // Preseason draft self-service picking — same turn-enforcement pattern as the weekly redraft
+  // above, added once Jay clarified he expected every draft (not just weekly redrafts) to be
+  // pick-from-your-own-device. No eliminations can exist yet this early, so eliminatedCastIds is
+  // always empty here (unlike the weekly redraft, which has to account for mid-season exits).
+  // The Commissioner panel's manual entry form still exists alongside this as a backup for
+  // anyone who can't get to the app live — same dual-entry pattern the weekly redraft already has.
+  if (state.drafts.preseason && !isDraftComplete(state.drafts.preseason.board, state.drafts.preseason.picks, state.cast.map((c) => c.id), new Set())) {
+    const draft = state.drafts.preseason;
+    const flat = flattenDraftBoard(draft.board);
+    const nextSlot = flat[draft.picks.length];
+    const myRoster = getRosterForManager(draft.picks, currentManagerId);
+
+    if (nextSlot.managerId === currentManagerId) {
+      const available = getAvailableCast(state.cast.map((c) => c.id), new Set(), draft.picks);
+      const castOptions = available.map((id) => `<option value="${id}">${castNameWithGender(state, id)}</option>`).join('');
+
+      container.innerHTML = `
+        <p><strong>It's your turn!</strong> Preseason Draft, round ${nextSlot.round + 1} of ${draft.board.length}.</p>
+        <h4>Your Roster So Far</h4>
+        ${rosterCardsHtml(state, myRoster)}
+        ${genderHintHtml(state, myRoster)}
+        <div class="control-row">
+          <select id="my-preseason-pick-select">${castOptions}</select>
+          <button id="my-preseason-pick-btn">Submit Pick</button>
+        </div>
+      `;
+      container.querySelector('#my-preseason-pick-btn').addEventListener('click', () => {
+        onPreseasonPick(container.querySelector('#my-preseason-pick-select').value);
+      });
+    } else {
+      container.innerHTML = `
+        <p>Preseason Draft is in progress &mdash; waiting on <strong>${managerName(state, nextSlot.managerId)}</strong>'s pick (round ${nextSlot.round + 1} of ${draft.board.length}).</p>
         <h4>Your Roster So Far</h4>
         ${rosterCardsHtml(state, myRoster)}
       `;
