@@ -27,6 +27,8 @@ import {
   renderPreseasonBonusPick,
   isPreseasonBonusPickLocked,
   renderCastBrowser,
+  renderCountdown,
+  renderCastBioModal,
 } from './views/player.js';
 
 const els = {
@@ -45,10 +47,16 @@ const els = {
   finalChallengeContainer: document.getElementById('final-challenge-container'),
   siteLogo: document.getElementById('site-logo'),
   identityModal: document.getElementById('identity-modal'),
+  castBioModal: document.getElementById('cast-bio-modal'),
+  countdownContainer: document.getElementById('countdown-container'),
+  leaderboardSection: document.getElementById('leaderboard-section'),
   leaderboardContainer: document.getElementById('leaderboard-container'),
+  myRosterSection: document.getElementById('my-roster-section'),
   myRosterContainer: document.getElementById('my-roster-container'),
+  safePickSection: document.getElementById('safe-pick-section'),
   safePickContainer: document.getElementById('safe-pick-container'),
   bonusPickContainer: document.getElementById('bonus-pick-container'),
+  castBrowserSection: document.getElementById('cast-browser-section'),
   castBrowserContainer: document.getElementById('cast-browser-container'),
 };
 
@@ -84,9 +92,31 @@ function openIdentityModal() {
   els.identityModal.style.display = 'flex';
 }
 
+/** Preseason Mode: before the commissioner has ever run the preseason draft, there's nothing
+ *  real yet for Leaderboard/My Roster/Safe Pick to show — so hide them and lead with Cast
+ *  Browser (open by default here, unlike its normal closed-by-default accordion state) plus a
+ *  countdown to draft night. Preseason Bonus Pick stays too since it's a real, usable action
+ *  before the draft happens (it's a season-finish prediction, not roster-dependent). Commissioner
+ *  mode is untouched by this — Jay still needs it to actually run the draft. */
+function isPreseasonMode(state) {
+  return !state.drafts.preseason;
+}
+
 function renderPlayerView() {
   const currentManagerId = loadPlayerIdentity();
+  const preseasonMode = isPreseasonMode(currentState);
+
   renderIdentityIndicator(els.siteLogo, { onSwitch: openIdentityModal });
+
+  els.countdownContainer.style.display = preseasonMode ? 'block' : 'none';
+  els.leaderboardSection.style.display = preseasonMode ? 'none' : '';
+  els.myRosterSection.style.display = preseasonMode ? 'none' : '';
+  els.safePickSection.style.display = preseasonMode ? 'none' : '';
+  if (preseasonMode) {
+    renderCountdown(els.countdownContainer);
+    els.castBrowserSection.open = true;
+  }
+
   renderLeaderboard(els.leaderboardContainer, currentState, currentManagerId);
   renderMyRoster(els.myRosterContainer, currentState, currentManagerId, {
     onPick: (castId) =>
@@ -158,7 +188,12 @@ function renderPlayerView() {
         return fresh;
       }),
   });
-  renderCastBrowser(els.castBrowserContainer, currentState);
+  renderCastBrowser(els.castBrowserContainer, currentState, {
+    onCardClick: (castId) => {
+      renderCastBioModal(els.castBioModal, currentState, castId);
+      els.castBioModal.style.display = 'flex';
+    },
+  });
   if (!currentManagerId) openIdentityModal();
 }
 

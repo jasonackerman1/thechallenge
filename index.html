@@ -187,6 +187,35 @@
     }
     .modal-card h3 { margin-top: 0; }
 
+    /* Cast Browser cards are tappable for a bio (Safe Pick/My Roster reuse the same card markup
+       but already use a tap to submit a pick, so this cursor hint is scoped to Cast Browser
+       only — it would be misleading elsewhere). */
+    #cast-browser-container .cast-card { cursor: pointer; }
+    .bio-card { position: relative; text-align: center; }
+    .bio-close {
+      position: absolute;
+      top: 8px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.4rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 4px;
+    }
+    .bio-photo {
+      width: 140px;
+      border-radius: 10px;
+      margin: 4px auto 12px;
+      display: block;
+    }
+    .bio-meta {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin: 4px 0;
+    }
+
     /* Leaderboard: a ranked list of cards rather than a plain table — big rank numeral, a
        progress bar sized relative to the leader's total (at-a-glance standing), gradient-text
        grand total (short numbers only — the h1 experiment showed gradient text goes muddy on
@@ -308,14 +337,63 @@
     .cast-card.sp-chosen { outline: 3px solid var(--neon-blue); outline-offset: 2px; }
 
     /* Smaller variant for the Safe Pick full-roster grid — same card, denser layout. */
-    .cast-grid.compact { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .cast-grid.compact .points-badge { font-size: 1.1rem; padding: 5px 9px 4px; min-width: 1.6rem; }
-    .cast-grid.compact .status-bar { font-size: 0.55rem; padding: 4px 5px; }
-    @media (min-width: 640px) { .cast-grid.compact { grid-template-columns: repeat(4, 1fr); } }
-    @media (min-width: 960px) { .cast-grid.compact { grid-template-columns: repeat(6, 1fr); } }
+    .cast-grid.compact { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+    .cast-grid.compact .points-badge { font-size: 0.9rem; padding: 4px 7px 3px; min-width: 1.3rem; }
+    .cast-grid.compact .status-bar { font-size: 0.5rem; padding: 3px 4px; }
+    @media (min-width: 640px) { .cast-grid.compact { grid-template-columns: repeat(5, 1fr); } }
+    @media (min-width: 960px) { .cast-grid.compact { grid-template-columns: repeat(8, 1fr); } }
 
     @media (min-width: 480px) {
       .cast-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* Preseason Mode countdown — the first thing family members see before the draft has
+       happened, replacing the normal Leaderboard/My Roster/Safe Pick sections which have
+       nothing real to show yet. */
+    .countdown-card {
+      background: var(--bg-panel);
+      border-radius: 12px;
+      padding: 20px;
+      margin: 12px 0 24px;
+      text-align: center;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+    }
+    .countdown-label {
+      font-family: 'Anton', sans-serif;
+      letter-spacing: 0.04em;
+      font-size: 1.1rem;
+      color: var(--neon-blue);
+      text-transform: uppercase;
+      margin-bottom: 14px;
+    }
+    .countdown-clock {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+    }
+    .countdown-clock > div {
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 10px 6px;
+      min-width: 56px;
+    }
+    .countdown-clock span {
+      display: block;
+      font-family: 'Anton', sans-serif;
+      font-size: 1.8rem;
+      line-height: 1;
+      background: var(--brand-gradient);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .countdown-clock small {
+      display: block;
+      margin-top: 4px;
+      font-size: 0.6rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
     }
 
     table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
@@ -383,13 +461,19 @@
 
   <div id="status"></div>
 
-  <h2>Leaderboard</h2>
-  <div id="leaderboard-container"></div>
+  <div id="countdown-container" style="display:none;"></div>
 
-  <h2>My Roster</h2>
-  <div id="my-roster-container"></div>
+  <div id="leaderboard-section">
+    <h2>Leaderboard</h2>
+    <div id="leaderboard-container"></div>
+  </div>
 
-  <details class="section">
+  <div id="my-roster-section">
+    <h2>My Roster</h2>
+    <div id="my-roster-container"></div>
+  </div>
+
+  <details id="safe-pick-section" class="section">
     <summary>Safe Pick</summary>
     <div id="safe-pick-container"></div>
   </details>
@@ -399,7 +483,7 @@
     <div id="bonus-pick-container"></div>
   </details>
 
-  <details class="section">
+  <details id="cast-browser-section" class="section">
     <summary>Cast Browser</summary>
     <div id="cast-browser-container"></div>
   </details>
@@ -432,6 +516,7 @@
   </div>
 
   <div id="identity-modal" class="modal-overlay" style="display:none;"></div>
+  <div id="cast-bio-modal" class="modal-overlay" style="display:none;"></div>
 
   <script type="module" src="js/app.js"></script>
 </body>

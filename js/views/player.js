@@ -12,6 +12,7 @@ import {
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, TARGET_ROSTER_SIZE } from '../draft.js';
 import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber } from './commissioner.js';
 import { managerName, castName, castNameWithGender, castCardHtml } from './shared.js';
+import { CAST_BIOS } from '../bios.js';
 
 /** App-wide "who's using this device" modal — same first-open pattern as the location picker
  *  used elsewhere (auto-opens once if no identity is set, reopenable any time via the small
@@ -346,7 +347,44 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
   });
 }
 
-export function renderCastBrowser(container, state) {
+/** Preseason Mode countdown to draft night. Target is a fixed real-world moment (Aug 1, 2026,
+ *  8:30pm), parsed as each viewer's own local time — fine since the whole family is in the same
+ *  timezone; revisit if that stops being true. Runs its own setInterval since it's the only view
+ *  here that needs to tick on its own rather than re-rendering only on state changes. */
+const DRAFT_COUNTDOWN_TARGET = new Date('2026-08-01T20:30:00');
+let countdownIntervalId = null;
+
+export function renderCountdown(container) {
+  if (countdownIntervalId) clearInterval(countdownIntervalId);
+
+  function tick() {
+    const diff = DRAFT_COUNTDOWN_TARGET.getTime() - Date.now();
+    if (diff <= 0) {
+      container.innerHTML = `<div class="countdown-card"><div class="countdown-label">It's Draft Night!</div></div>`;
+      clearInterval(countdownIntervalId);
+      return;
+    }
+    const days = Math.floor(diff / 86400000);
+    const hours = Math.floor((diff % 86400000) / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    const seconds = Math.floor((diff % 60000) / 1000);
+    container.innerHTML = `
+      <div class="countdown-card">
+        <div class="countdown-label">Countdown to Draft Night</div>
+        <div class="countdown-clock">
+          <div><span>${days}</span><small>Days</small></div>
+          <div><span>${hours}</span><small>Hrs</small></div>
+          <div><span>${minutes}</span><small>Min</small></div>
+          <div><span>${seconds}</span><small>Sec</small></div>
+        </div>
+      </div>`;
+  }
+
+  tick();
+  countdownIntervalId = setInterval(tick, 1000);
+}
+
+export function renderCastBrowser(container, state, { onCardClick } = {}) {
   const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
   const seasonPoints = computeCastSeasonPoints(state);
   const teams = [...new Set(state.cast.map((c) => c.team))];
@@ -367,4 +405,44 @@ export function renderCastBrowser(container, state) {
     .join('');
 
   container.innerHTML = sectionsHtml;
+
+  if (onCardClick) {
+    container.querySelectorAll('.cast-card').forEach((card) => {
+      card.addEventListener('click', () => onCardClick(card.dataset.castId));
+    });
+  }
+}
+
+/** Bio modal — opens from Cast Browser cards only (Safe Pick/My Roster reuse the same card
+ *  markup but tapping those already submits a pick, so a second click meaning also holds no
+ *  place there). Bio data is static reference content in bios.js, not part of the synced game
+ *  state. Backdrop-click-to-close is bound once via a dataset flag since modalEl itself persists
+ *  across renders (only its innerHTML is replaced) — same guard pattern as the identity
+ *  triple-tap binding. */
+export function renderCastBioModal(modalEl, state, castId) {
+  const cast = state.cast.find((c) => c.id === castId);
+  const bio = CAST_BIOS[castId];
+  modalEl.innerHTML = `
+    <div class="modal-card bio-card">
+      <button id="bio-close-btn" class="bio-close" aria-label="Close">&times;</button>
+      <img src="images/cast/${castId}.webp" alt="${cast?.name ?? castId}" class="bio-photo" />
+      <h3>${bio?.fullName ?? cast?.name ?? castId}</h3>
+      ${bio
+        ? `
+          <p class="bio-meta">${bio.age} &middot; ${bio.hometown}</p>
+          <p class="bio-meta">${bio.origin} &mdash; ${bio.history}</p>
+          <p>${bio.blurb}</p>
+        `
+        : `<p class="bio-meta">No bio on file yet.</p>`}
+    </div>
+  `;
+  modalEl.querySelector('#bio-close-btn').addEventListener('click', () => {
+    modalEl.style.display = 'none';
+  });
+  if (!modalEl.dataset.backdropBound) {
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) modalEl.style.display = 'none';
+    });
+    modalEl.dataset.backdropBound = 'true';
+  }
 }
