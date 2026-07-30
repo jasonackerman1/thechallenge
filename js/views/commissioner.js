@@ -4,6 +4,7 @@
 import { TARGET_ROSTER_SIZE, flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete } from '../draft.js';
 import {
   SCORING_EVENT_POINTS,
+  CONFESSIONAL_BONUS_POINTS,
   FINAL_CHALLENGE_POINTS,
   computeEliminationEpisodes,
   computeEligibleCastIds,
@@ -299,7 +300,7 @@ function finalizedEpisodesHtml(state) {
   return `<ul>${finalized
     .map((e) => {
       const eliminated = e.eliminations.length ? e.eliminations.map((el) => castName(state, el.castId)).join(', ') : 'none';
-      return `<li>Episode ${e.episodeNumber}: eliminated ${eliminated} &mdash; ${e.scoringEvents.length} scoring event(s), ${e.confessionalMinutes.length} confessional entr${e.confessionalMinutes.length === 1 ? 'y' : 'ies'}</li>`;
+      return `<li>Episode ${e.episodeNumber}: eliminated ${eliminated} &mdash; ${e.scoringEvents.length} scoring event(s)</li>`;
     })
     .join('')}</ul>`;
 }
@@ -311,7 +312,6 @@ export function renderEpisodeEntry(
     onStartEpisode,
     onAddScoringEvent,
     onRemoveScoringEvent,
-    onSetConfessional,
     onSaveEliminations,
     onFinalizeEpisode,
     onUnfinalizeLastEpisode,
@@ -362,7 +362,10 @@ export function renderEpisodeEntry(
   });
 
   const eventTypeOptions = Object.entries(SCORING_EVENT_POINTS)
-    .map(([type, points]) => `<option value="${type}">${type} (${points > 0 ? '+' : ''}${points})</option>`)
+    .map(([type, points]) => {
+      const label = type === 'CONFESSIONAL' ? `CONFESSIONAL (+${CONFESSIONAL_BONUS_POINTS} bonus to whoever has the most this episode)` : `${type} (${points > 0 ? '+' : ''}${points})`;
+      return `<option value="${type}">${label}</option>`;
+    })
     .join('');
 
   const castOptions = eligibleCast.map((c) => `<option value="${c.id}">${c.name} (${c.team})</option>`).join('');
@@ -374,10 +377,6 @@ export function renderEpisodeEntry(
         <button class="btn-inline" data-remove-event="${ev.id}" style="background:#7a2020;">Remove</button></li>`
         )
         .join('')
-    : '<li>(none yet)</li>';
-
-  const confessionalList = episode.confessionalMinutes.length
-    ? episode.confessionalMinutes.map((c) => `<li>${castName(state, c.castId)}: ${c.minutes} min</li>`).join('')
     : '<li>(none yet)</li>';
 
   const eliminatedThisEpisodeIds = new Set(episode.eliminations.map((e) => e.castId));
@@ -404,14 +403,6 @@ export function renderEpisodeEntry(
       <button id="add-event-btn">Add Event</button>
     </div>
 
-    <h4>Confessional Minutes</h4>
-    <ul>${confessionalList}</ul>
-    <div class="control-row">
-      <select id="confessional-cast-select">${castOptions}</select>
-      <input id="confessional-minutes-input" type="number" min="0" step="0.5" placeholder="minutes" />
-      <button id="set-confessional-btn">Set Minutes</button>
-    </div>
-
     <h4>Eliminations This Episode</h4>
     <div id="episode-entry-eliminations" class="checkbox-grid">${eliminationCheckboxes}</div>
     <button id="save-eliminations-btn">Save Eliminations</button>
@@ -433,13 +424,6 @@ export function renderEpisodeEntry(
 
   container.querySelectorAll('[data-remove-event]').forEach((btn) => {
     btn.addEventListener('click', () => onRemoveScoringEvent(btn.dataset.removeEvent));
-  });
-
-  container.querySelector('#set-confessional-btn').addEventListener('click', () => {
-    const castId = container.querySelector('#confessional-cast-select').value;
-    const minutes = Number(container.querySelector('#confessional-minutes-input').value);
-    if (!Number.isFinite(minutes)) return;
-    onSetConfessional({ castId, minutes });
   });
 
   container.querySelector('#save-eliminations-btn').addEventListener('click', () => {

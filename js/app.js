@@ -290,7 +290,6 @@ function renderEpisode() {
           episodeNumber,
           finalized: false,
           scoringEvents: [],
-          confessionalMinutes: [],
           eliminations: [],
         });
         return fresh;
@@ -304,14 +303,6 @@ function renderEpisode() {
       runMutation((fresh) => {
         const episode = getCurrentEpisode(fresh);
         episode.scoringEvents = episode.scoringEvents.filter((ev) => ev.id !== eventId);
-        return fresh;
-      }),
-    onSetConfessional: ({ castId, minutes }) =>
-      runMutation((fresh) => {
-        const episode = getCurrentEpisode(fresh);
-        const existing = episode.confessionalMinutes.find((c) => c.castId === castId);
-        if (existing) existing.minutes = minutes;
-        else episode.confessionalMinutes.push({ castId, minutes });
         return fresh;
       }),
     onSaveEliminations: (castIds) =>

@@ -14,12 +14,38 @@ export const SCORING_EVENT_POINTS = {
   CRIED: -5,
   MADE_OUT: 10,
   PUKED: -10,
+  // Worth 0 points per occurrence on its own — logged via the same Add Event UI as every other
+  // scoring event (select cast, count, Add Event), purely so computeMostConfessionalsCastIds
+  // below has something to count. The actual points come from the per-episode bonus.
+  CONFESSIONAL: 0,
 };
 
 export const SURVIVED_WEEK_POINTS = 5;
 export const SAFE_PICK_POINTS = 10;
 export const FINAL_CHALLENGE_POINTS = { third: 10, second: 25, winner: 50 };
 export const PRESEASON_BONUS_POINTS = { first: 30, second: 20, third: 10 };
+// Whoever has the single highest confessional count in an episode gets this bonus. Ties (two or
+// more cast members sharing the max) all get it — no arbitrary tiebreaker.
+export const CONFESSIONAL_BONUS_POINTS = 5;
+
+/** Map<castId, count> of CONFESSIONAL-type scoring events logged for a single episode. */
+function confessionalCounts(episode) {
+  const counts = new Map();
+  for (const event of episode.scoringEvents ?? []) {
+    if (event.type !== 'CONFESSIONAL') continue;
+    counts.set(event.castId, (counts.get(event.castId) ?? 0) + (event.count ?? 1));
+  }
+  return counts;
+}
+
+/** Set<castId> tied for the most confessionals this episode (empty if nobody logged any). */
+export function computeMostConfessionalsCastIds(episode) {
+  const counts = confessionalCounts(episode);
+  if (counts.size === 0) return new Set();
+  const max = Math.max(...counts.values());
+  if (max === 0) return new Set();
+  return new Set([...counts.entries()].filter(([, count]) => count === max).map(([castId]) => castId));
+}
 
 /** Map<castId, episodeNumber> — the episode each cast member was eliminated in. */
 export function computeEliminationEpisodes(episodes) {
@@ -65,6 +91,9 @@ export function computeCastPointsForEpisode(episode, castId, rosteredThisWeek, e
   const eliminatedThisEpisode = isEliminatedAsOf(castId, episode.episodeNumber, eliminationEpisodes);
   if (rosteredThisWeek && !eliminatedThisEpisode) {
     points += SURVIVED_WEEK_POINTS;
+  }
+  if (computeMostConfessionalsCastIds(episode).has(castId)) {
+    points += CONFESSIONAL_BONUS_POINTS;
   }
   return points;
 }
