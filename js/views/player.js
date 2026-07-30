@@ -152,6 +152,58 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
     return;
   }
 
+  // Preseason draft self-service picking — not part of the season's one twist (everyone knows
+  // about the initial draft from the start), so this always shows regardless of
+  // redraftTwistRevealed below. Same turn-enforcement pattern as the weekly redraft. No
+  // eliminations can exist yet this early, so eliminatedCastIds is always empty here (unlike the
+  // weekly redraft, which has to account for mid-season exits). The Commissioner panel's manual
+  // entry form still exists alongside this as a backup for anyone who can't get to the app live.
+  if (state.drafts.preseason && !isDraftComplete(state.drafts.preseason.board, state.drafts.preseason.picks, state.cast.map((c) => c.id), new Set())) {
+    const draft = state.drafts.preseason;
+    const flat = flattenDraftBoard(draft.board);
+    const nextSlot = flat[draft.picks.length];
+    const myRoster = getRosterForManager(draft.picks, currentManagerId);
+
+    if (nextSlot.managerId === currentManagerId) {
+      const available = getAvailableCast(state.cast.map((c) => c.id), new Set(), draft.picks);
+      const castOptions = available.map((id) => `<option value="${id}">${castNameWithGender(state, id)}</option>`).join('');
+
+      container.innerHTML = `
+        <p><strong>It's your turn!</strong> Preseason Draft, round ${nextSlot.round + 1} of ${draft.board.length}.</p>
+        <h4>Your Roster So Far</h4>
+        ${rosterCardsHtml(state, myRoster)}
+        ${genderHintHtml(state, myRoster)}
+        <div class="control-row">
+          <select id="my-preseason-pick-select">${castOptions}</select>
+          <button id="my-preseason-pick-btn">Submit Pick</button>
+        </div>
+      `;
+      container.querySelector('#my-preseason-pick-btn').addEventListener('click', () => {
+        onPreseasonPick(container.querySelector('#my-preseason-pick-select').value);
+      });
+    } else {
+      container.innerHTML = `
+        <p>Preseason Draft is in progress &mdash; waiting on <strong>${managerName(state, nextSlot.managerId)}</strong>'s pick (round ${nextSlot.round + 1} of ${draft.board.length}).</p>
+        <h4>Your Roster So Far</h4>
+        ${rosterCardsHtml(state, myRoster)}
+      `;
+    }
+    return;
+  }
+
+  // The season's one twist: nothing past this point (weekly redraft turns, "waiting on Week N"
+  // messaging) may hint that a redraft mechanic exists until Jay reveals it — right after
+  // Episode 1, via the Commissioner panel's "Reveal Redraft Twist" toggle. Until then, show a
+  // deliberately neutral roster view, same for everyone regardless of what's actually happening
+  // behind the scenes (an open Week 2 redraft, a finalized Episode 1, etc.).
+  if (!state.meta.redraftTwistRevealed) {
+    container.innerHTML = `
+      <p><strong>Your Roster:</strong></p>
+      ${rosterCardsHtml(state, currentRosterIds(state, currentManagerId))}
+    `;
+    return;
+  }
+
   const currentWeek = getCurrentRedraftWeek(state);
 
   if (currentWeek !== null) {
@@ -181,45 +233,6 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
     } else {
       container.innerHTML = `
         <p>Week ${currentWeek} redraft is in progress &mdash; waiting on <strong>${managerName(state, nextSlot.managerId)}</strong>'s pick (round ${nextSlot.round + 1} of ${draft.board.length}).</p>
-        <h4>Your Roster So Far</h4>
-        ${rosterCardsHtml(state, myRoster)}
-      `;
-    }
-    return;
-  }
-
-  // Preseason draft self-service picking — same turn-enforcement pattern as the weekly redraft
-  // above, added once Jay clarified he expected every draft (not just weekly redrafts) to be
-  // pick-from-your-own-device. No eliminations can exist yet this early, so eliminatedCastIds is
-  // always empty here (unlike the weekly redraft, which has to account for mid-season exits).
-  // The Commissioner panel's manual entry form still exists alongside this as a backup for
-  // anyone who can't get to the app live — same dual-entry pattern the weekly redraft already has.
-  if (state.drafts.preseason && !isDraftComplete(state.drafts.preseason.board, state.drafts.preseason.picks, state.cast.map((c) => c.id), new Set())) {
-    const draft = state.drafts.preseason;
-    const flat = flattenDraftBoard(draft.board);
-    const nextSlot = flat[draft.picks.length];
-    const myRoster = getRosterForManager(draft.picks, currentManagerId);
-
-    if (nextSlot.managerId === currentManagerId) {
-      const available = getAvailableCast(state.cast.map((c) => c.id), new Set(), draft.picks);
-      const castOptions = available.map((id) => `<option value="${id}">${castNameWithGender(state, id)}</option>`).join('');
-
-      container.innerHTML = `
-        <p><strong>It's your turn!</strong> Preseason Draft, round ${nextSlot.round + 1} of ${draft.board.length}.</p>
-        <h4>Your Roster So Far</h4>
-        ${rosterCardsHtml(state, myRoster)}
-        ${genderHintHtml(state, myRoster)}
-        <div class="control-row">
-          <select id="my-preseason-pick-select">${castOptions}</select>
-          <button id="my-preseason-pick-btn">Submit Pick</button>
-        </div>
-      `;
-      container.querySelector('#my-preseason-pick-btn').addEventListener('click', () => {
-        onPreseasonPick(container.querySelector('#my-preseason-pick-select').value);
-      });
-    } else {
-      container.innerHTML = `
-        <p>Preseason Draft is in progress &mdash; waiting on <strong>${managerName(state, nextSlot.managerId)}</strong>'s pick (round ${nextSlot.round + 1} of ${draft.board.length}).</p>
         <h4>Your Roster So Far</h4>
         ${rosterCardsHtml(state, myRoster)}
       `;

@@ -270,6 +270,11 @@ function renderRedraft() {
         fresh.meta.rosterFrozen = !fresh.meta.rosterFrozen;
         return fresh;
       }),
+    onToggleTwistRevealed: () =>
+      runMutation((fresh) => {
+        fresh.meta.redraftTwistRevealed = !fresh.meta.redraftTwistRevealed;
+        return fresh;
+      }),
   });
 }
 

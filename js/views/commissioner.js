@@ -181,9 +181,34 @@ function attachFreezeListener(container, state, onToggleFreeze) {
   });
 }
 
-export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onToggleFreeze }) {
+/** The season's one twist (kept secret from the family until Jay reveals it): everyone starts
+ *  from a one-time preseason draft, and right after Episode 1 airs, every week from then on gets
+ *  a brand-new redraft. Until this flag flips, My Roster shows a neutral "Your Roster" with no
+ *  hint that a redraft is coming — see the reveal-gate in views/player.js. */
+function twistControlHtml(state) {
+  return state.meta.redraftTwistRevealed
+    ? `<p><strong>Redraft twist revealed to the family.</strong> <button id="twist-toggle-btn" class="btn-inline">Undo (hide again)</button></p>`
+    : `<button id="twist-toggle-btn" class="btn-inline" style="background:#7a2020;">Reveal Redraft Twist to Family</button>`;
+}
+
+function attachTwistListener(container, state, onToggleTwistRevealed) {
+  container.querySelector('#twist-toggle-btn')?.addEventListener('click', () => {
+    const willReveal = !state.meta.redraftTwistRevealed;
+    if (
+      willReveal &&
+      !confirm(
+        'Reveal the redraft twist to the family? Once revealed, My Roster will show the real weekly redraft (turns, picks, etc.) to everyone instead of just their current roster.'
+      )
+    ) {
+      return;
+    }
+    onToggleTwistRevealed();
+  });
+}
+
+export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onToggleFreeze, onToggleTwistRevealed }) {
   const currentWeek = getCurrentRedraftWeek(state);
-  const statusHtml = `${scarcityBannerHtml(state)}${freezeControlHtml(state)}`;
+  const statusHtml = `${scarcityBannerHtml(state)}${twistControlHtml(state)}${freezeControlHtml(state)}`;
 
   if (currentWeek === null) {
     const week = nextRedraftWeek(state);
@@ -191,6 +216,7 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
     if (state.meta.rosterFrozen) {
       container.innerHTML = `${statusHtml}<p><strong>No further redrafts this season.</strong></p>${redraftHistoryHtml(state)}`;
       attachFreezeListener(container, state, onToggleFreeze);
+  attachTwistListener(container, state, onToggleTwistRevealed);
       return;
     }
 
@@ -198,6 +224,7 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
     if (!prevEpisode || !prevEpisode.finalized) {
       container.innerHTML = `${statusHtml}<p>Waiting on Episode ${week - 1} to be finalized before the Week ${week} redraft can start.</p>${redraftHistoryHtml(state)}`;
       attachFreezeListener(container, state, onToggleFreeze);
+  attachTwistListener(container, state, onToggleTwistRevealed);
       return;
     }
 
@@ -216,6 +243,7 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
     `;
     container.querySelector('#start-redraft-btn').addEventListener('click', onStartRedraft);
     attachFreezeListener(container, state, onToggleFreeze);
+  attachTwistListener(container, state, onToggleTwistRevealed);
     return;
   }
 
@@ -236,6 +264,7 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
     },
   });
   attachFreezeListener(container, state, onToggleFreeze);
+  attachTwistListener(container, state, onToggleTwistRevealed);
 }
 
 /** The episode currently being entered: the last one in the array, if it isn't finalized yet. */
