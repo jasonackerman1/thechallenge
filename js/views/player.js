@@ -6,6 +6,7 @@ import {
   computeLeaderboard,
   computeEliminationEpisodes,
   computeCastSeasonPoints,
+  getUsedSafePicks,
   SAFE_PICK_POINTS,
   PRESEASON_BONUS_POINTS,
 } from '../scoring.js';
@@ -236,6 +237,17 @@ export function renderSafePick(container, state, currentManagerId, { onSubmitSaf
   const existingPick = (state.safePicks?.[String(week)] ?? []).find((p) => p.managerId === currentManagerId);
   const seasonPoints = computeCastSeasonPoints(state);
 
+  // Two-step dropdown + Submit, not tap-to-pick: a stray tap on the card grid used to submit a
+  // safe pick immediately with no confirmation, which Jay flagged as too easy to fat-finger.
+  // The card grid below stays purely visual (status/dimming reference) — the dropdown is the
+  // only thing that actually submits.
+  const usedCastIds = getUsedSafePicks(state, currentManagerId);
+  if (existingPick) usedCastIds.delete(existingPick.castId);
+  const availableOptions = state.cast
+    .filter((c) => !eliminationEpisodes.has(c.id) && !usedCastIds.has(c.id))
+    .map((c) => `<option value="${c.id}" ${existingPick?.castId === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
+    .join('');
+
   const cardsHtml = state.cast
     .map((c) => {
       const isCurrentPick = existingPick?.castId === c.id;
@@ -250,22 +262,25 @@ export function renderSafePick(container, state, currentManagerId, { onSubmitSaf
       if (eliminated && !isCurrentPick) {
         return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText: 'Eliminated', eliminated: true });
       }
-      // Available to pick (or this week's own not-yet-decided pick).
-      const extraClass = ['sp-pickable', isCurrentPick ? 'sp-chosen' : ''].filter(Boolean).join(' ');
       const statusText = isCurrentPick ? `Week ${week} Pick` : castNameWithGender(state, c.id);
-      return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText, extraClass });
+      return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText, extraClass: isCurrentPick ? 'sp-chosen' : '' });
     })
     .join('');
 
   container.innerHTML = `
-    <p>Tap one cast member you think survives Week ${week}'s episode &mdash; +${SAFE_PICK_POINTS} points if they do.
-    Each cast member can only be used once all season, and this locks the moment the commissioner starts entering Week ${week}'s results.</p>
+    <p>Pick who you think survives Week ${week}'s episode from the dropdown below, then hit Submit &mdash;
+    +${SAFE_PICK_POINTS} points if they do. Each cast member can only be used once all season, and this locks
+    the moment the commissioner starts entering Week ${week}'s results.</p>
     ${existingPick ? `<p><strong>Current pick:</strong> ${castName(state, existingPick.castId)} <button id="safe-pick-clear-btn" class="btn-inline" style="background:#7a2020;">Clear</button></p>` : ''}
+    <div class="control-row">
+      <select id="safe-pick-select">${availableOptions}</select>
+      <button id="safe-pick-submit-btn">Submit</button>
+    </div>
     <div class="cast-grid compact">${cardsHtml}</div>
   `;
 
-  container.querySelectorAll('.cast-card.sp-pickable').forEach((card) => {
-    card.addEventListener('click', () => onSubmitSafePick(card.dataset.castId));
+  container.querySelector('#safe-pick-submit-btn').addEventListener('click', () => {
+    onSubmitSafePick(container.querySelector('#safe-pick-select').value);
   });
   container.querySelector('#safe-pick-clear-btn')?.addEventListener('click', onClearSafePick);
 }
