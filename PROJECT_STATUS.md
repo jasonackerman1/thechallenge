@@ -1,4 +1,4 @@
-# Project Status — updated 2026-07-31 (family setup instructions written)
+# Project Status — updated 2026-07-31 (Commissioner Reminders block added)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -10,8 +10,10 @@ end-to-end simulation pass through the rest of the season on his real Gist to co
 holds up before handing the app to the other 5 managers. Every mutation on the live Gist is real
 family data now, not test data.
 
-**Git status: clean and pushed.** Commit `664fe64` — app icon replaced with the real biohazard
-symbol (see below) — on top of `a4eb156` (Safe Pick hit cards now grey out like every other
+**Git status: clean and pushed.** Commit `dbd8792` — fixed disabled reminder buttons that looked
+identical to enabled ones (see below) — on top of `67440ad` (Commissioner Reminders block:
+clipboard-copy Safe Pick / Turn reminder buttons), `664fe64` (app icon replaced with the real
+biohazard symbol) — on top of `a4eb156` (Safe Pick hit cards now grey out like every other
 locked-out state), `5c1013f` (pre-share readiness pass: Refresh button + auto-refresh, offline
 retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509ac61`/`3d0e355`/
 `da6eaea` (confessional-count rework, Season Status banner, a cut Gist API request, status doc
@@ -598,6 +600,35 @@ scoring, all on his real Gist (not a test one). Three things came out of it, all
 - **Player identity is a first-open modal + persistent switch link**, not an inline control tied
   to one view — it's global device state that matters to every player-specific feature, not just
   the leaderboard (Jay corrected an earlier inline-control build on this point).
+
+## Commissioner "Reminders" block added — 2026-07-31 (`67440ad`, `dbd8792`)
+
+Jay asked about push notifications for nudging the family about missed Safe Picks / stalled
+drafts. Real Web Push needs actual server-side infrastructure (scheduled job, subscription
+storage, signing keys) that this app deliberately doesn't have — too big for what he actually
+needed. Built a much smaller "Reminders" block in the Commissioner panel instead (top, right
+after Data Sync): two buttons that compute who's missing from real Gist data and copy a
+ready-to-paste message to the clipboard — Jay pastes it into his own existing group chat, nothing
+sends automatically, no phone numbers stored.
+
+- **Copy Safe Pick Reminder** — names every active manager who hasn't submitted the currently-open
+  week's Safe Pick (`nextEpisodeNumber(state)`, same calculation the player-facing Safe Pick view
+  already uses).
+- **Copy Turn Reminder** — names whoever's currently holding up a turn-based pick, covering both
+  the preseason draft and weekly redraft with one button (both are structurally identical —
+  exactly one manager is "up" at a time).
+- Both disable themselves when there's nothing to remind about. Pure read + clipboard — never
+  touches the Gist, no write-conflict risk.
+- Verified live via mocked-Gist Playwright (with clipboard permissions granted) across 4
+  scenarios: correct missing-list, correct redraft turn, correct preseason-draft turn (a separate
+  code path), correct disabling.
+
+**Real bug Jay caught immediately on his own phone, fixed same session (`dbd8792`):** disabled
+buttons had no `:disabled` CSS anywhere in the app, so a disabled button looked 100% identical to
+a working one — tapping it did correctly nothing, with zero indication why, reading exactly like
+"the app is broken." Fixed with real dimming (`button:disabled { opacity: 0.35 }`, benefits every
+disabled button app-wide) plus plain always-visible text explaining the specific reason — a
+tooltip was explicitly avoided since it's useless without a mouse/hover on a phone.
 
 ## Setup instructions for the debug shell
 
