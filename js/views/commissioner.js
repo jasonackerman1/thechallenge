@@ -562,10 +562,16 @@ export function renderReminders(container, state) {
 
   const safeBtnHtml = missing.length
     ? `<button id="remind-safepick-btn">Copy Safe Pick Reminder</button>`
-    : `<button disabled title="Everyone's already submitted">Copy Safe Pick Reminder</button>`;
+    : `<button disabled>Copy Safe Pick Reminder</button>`;
   const turnBtnHtml = turn
     ? `<button id="remind-turn-btn">Copy Turn Reminder</button>`
-    : `<button disabled title="No draft or redraft currently active">Copy Turn Reminder</button>`;
+    : `<button disabled>Copy Turn Reminder</button>`;
+
+  // Disabled buttons are silent by nature (a tap does nothing, browser-enforced) — a title
+  // tooltip doesn't help on a phone with no hover, so the reason has to be plain visible text,
+  // not just a dimmed button, or a disabled tap reads as "broken" rather than "nothing to do."
+  const safeReasonHtml = missing.length ? '' : `<p class="note">✓ Everyone's already submitted Week ${safeWeek}'s Safe Pick.</p>`;
+  const turnReasonHtml = turn ? '' : `<p class="note">No draft or redraft is currently active — nobody's turn to nudge.</p>`;
 
   container.innerHTML = `
     <p class="note">Copies a reminder message to your clipboard — paste it into your Challenge
@@ -574,6 +580,8 @@ export function renderReminders(container, state) {
       ${safeBtnHtml}
       ${turnBtnHtml}
     </div>
+    ${safeReasonHtml}
+    ${turnReasonHtml}
     <p id="reminder-status" class="note"></p>
   `;
 
