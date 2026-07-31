@@ -509,3 +509,92 @@ export function renderFinalChallengeEntry(container, state, { onSetFinalChalleng
     }
   });
 }
+
+function joinNames(names) {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
+}
+
+/** Active managers who haven't submitted a Safe Pick for the currently-open week yet. Reuses
+ *  nextEpisodeNumber unchanged — it's the same "currently open" week renderSafePick itself uses,
+ *  so this always matches what a manager actually sees on their own screen. */
+function missingSafePicks(state) {
+  const week = nextEpisodeNumber(state);
+  const submittedIds = new Set((state.safePicks?.[String(week)] ?? []).map((p) => p.managerId));
+  return { week, missing: state.managers.filter((m) => m.active && !submittedIds.has(m.id)) };
+}
+
+/** Whoever is currently holding up a turn-based draft — the preseason draft if it's still
+ *  running, otherwise the active weekly redraft, otherwise null if nothing is in progress. */
+function currentDraftTurn(state) {
+  const preseason = state.drafts.preseason;
+  if (preseason) {
+    const eliminatedCastIds = new Set(); // preseason draft has no eliminations yet by definition
+    const allCastIds = state.cast.map((c) => c.id);
+    if (!isDraftComplete(preseason.board, preseason.picks, allCastIds, eliminatedCastIds)) {
+      const nextSlot = flattenDraftBoard(preseason.board)[preseason.picks.length];
+      return { type: 'preseason', managerId: nextSlot.managerId };
+    }
+  }
+  const week = getCurrentRedraftWeek(state);
+  if (week !== null) {
+    const draft = state.drafts.weekly[String(week)];
+    const nextSlot = flattenDraftBoard(draft.board)[draft.picks.length];
+    return { type: 'redraft', week, managerId: nextSlot.managerId };
+  }
+  return null;
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function renderReminders(container, state) {
+  const { week: safeWeek, missing } = missingSafePicks(state);
+  const turn = currentDraftTurn(state);
+
+  const safeBtnHtml = missing.length
+    ? `<button id="remind-safepick-btn">Copy Safe Pick Reminder</button>`
+    : `<button disabled title="Everyone's already submitted">Copy Safe Pick Reminder</button>`;
+  const turnBtnHtml = turn
+    ? `<button id="remind-turn-btn">Copy Turn Reminder</button>`
+    : `<button disabled title="No draft or redraft currently active">Copy Turn Reminder</button>`;
+
+  container.innerHTML = `
+    <p class="note">Copies a reminder message to your clipboard — paste it into your Challenge
+    Fantasy group chat yourself. Nothing gets sent automatically.</p>
+    <div class="actions">
+      ${safeBtnHtml}
+      ${turnBtnHtml}
+    </div>
+    <p id="reminder-status" class="note"></p>
+  `;
+
+  const statusEl = container.querySelector('#reminder-status');
+
+  const safeBtn = container.querySelector('#remind-safepick-btn');
+  safeBtn?.addEventListener('click', async () => {
+    const names = joinNames(missing.map((m) => m.name));
+    const text = `⏰ Reminder: ${names} still need to submit Week ${safeWeek}'s Safe Pick!`;
+    const ok = await copyToClipboard(text);
+    statusEl.textContent = ok ? `Copied: "${text}"` : `Couldn't copy automatically — here it is to copy by hand: "${text}"`;
+  });
+
+  const turnBtn = container.querySelector('#remind-turn-btn');
+  turnBtn?.addEventListener('click', async () => {
+    const name = managerName(state, turn.managerId);
+    const text =
+      turn.type === 'preseason'
+        ? `⏰ Reminder: ${name}, it's your turn to draft your preseason roster!`
+        : `⏰ Reminder: ${name}, it's your turn to redraft your Week ${turn.week} roster!`;
+    const ok = await copyToClipboard(text);
+    statusEl.textContent = ok ? `Copied: "${text}"` : `Couldn't copy automatically — here it is to copy by hand: "${text}"`;
+  });
+}

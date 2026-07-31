@@ -12,6 +12,7 @@ import {
   renderEpisodeEntry,
   renderWeeklyRedraft,
   renderFinalChallengeEntry,
+  renderReminders,
   getCurrentEpisode,
   nextEpisodeNumber,
   rostersReadyForEpisode,
@@ -44,6 +45,7 @@ const els = {
   unlockForm: document.getElementById('unlock-form'),
   passwordInput: document.getElementById('password-input'),
   commissionerPanel: document.getElementById('commissioner-panel'),
+  remindersContainer: document.getElementById('reminders-container'),
   draftContainer: document.getElementById('draft-container'),
   episodeContainer: document.getElementById('episode-container'),
   redraftContainer: document.getElementById('redraft-container'),
@@ -90,6 +92,7 @@ function render(state) {
     renderEpisode();
     renderRedraft();
     renderFinalChallenge();
+    renderReminders(els.remindersContainer, state);
   }
 }
 
@@ -525,6 +528,7 @@ function boot() {
       renderEpisode();
       renderRedraft();
       renderFinalChallenge();
+      renderReminders(els.remindersContainer, currentState);
     } else {
       setStatus('Wrong commissioner password.', true);
     }
