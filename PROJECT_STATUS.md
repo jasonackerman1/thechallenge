@@ -1,4 +1,4 @@
-# Project Status — updated 2026-07-30 (icon replaced, evening/night)
+# Project Status — updated 2026-07-31 (family setup instructions written)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -43,6 +43,20 @@ before iterating on guessed proportions — faster and strictly better than eyeb
 Also: draft preview images need to live inside the actual project folder (not an external
 scratchpad) if Jay needs to open them in his own editor/Finder — a `icons/_drafts/` folder
 (deleted before the final commit) fixed this after he couldn't find the first round of previews.
+
+## Family setup instructions written — 2026-07-30/31
+
+Jay asked for clear, forwardable instructions for the other 5 managers: installing the app to the
+home screen and connecting with the shared Token + Gist ID. Given directly in conversation as a
+single plain-text copy/paste block, deliberately not committed to this repo or saved in memory —
+that Token can wipe the whole season, so it should only ever live in Jay's own private messages
+to each manager, not in a file.
+
+**Correction: Chrome on iOS installs to the home screen fine, not just Safari.** First draft
+claimed only Safari supports a true standalone PWA install on iOS — Jay corrected this from his
+own repeated real-device testing (he's been using Chrome for every home-screen install this whole
+project) and corrected the exact tap sequence (Share icon in the URL bar → "View More" → scroll →
+"Add to Home Screen"). Final instructions cover both browsers without ranking one as better.
 
 **GitHub API rate limit note — hit TWICE now, second time mid-live-simulation.** First hit
 2026-07-29/30 during automated testing (see below); recurred 2026-07-30 while Jay was running his
