@@ -1,4 +1,4 @@
-# Project Status — updated 2026-07-31 (Commissioner Reminders block added)
+# Project Status — updated 2026-08-01 (elimination scoring re-confirmed, Paramount+ pacing contingency noted)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -20,6 +20,28 @@ retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509a
 updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
 toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below).
 No local uncommitted changes, no untracked files, all on `origin/main`.
+
+## Scoring question re-confirmed + a real-world pacing contingency noted — 2026-08-01
+
+No code changes this session — Jay asked two things, both answered by walking through the actual
+code rather than from memory:
+
+- **"Once a player is eliminated, they don't earn more points, right?"** Confirmed. Two mechanisms
+  enforce it: (1) `computeCastPointsForEpisode` (`js/scoring.js`) only awards the +5
+  Survived-the-Week bonus when a cast member is rostered *and not yet eliminated as of that
+  episode* — so the elimination episode itself pays no survival bonus, though other same-episode
+  event points already earned still count (this half was already confirmed with Jay on
+  2026-07-30, see below). (2) `getAvailableCast`/`validatePick` (`js/draft.js`) exclude eliminated
+  cast from every future weekly redraft, so they can never be rostered again after their
+  elimination episode — not just "no more survival points," genuinely zero points possible from
+  the next episode on, since they can't appear on anyone's roster at all.
+- **Speculation about Paramount+ dropping multiple episodes at once.** Jay's heard this might
+  happen (unconfirmed) and is already leaning toward a house rule of still processing one episode
+  per Wednesday regardless of how many actually air, if it comes to that. Confirmed this needs
+  **zero app changes** either way — scoring is keyed off `episodeNumber`, not a real calendar
+  date, so the commissioner panel already supports entering/finalizing episodes at whatever pace
+  the group agrees to. Purely a group pacing decision, not an engineering one. Noted in memory as
+  an open contingency, not acted on further.
 
 ## App icon replaced — 2026-07-30 (`664fe64`)
 
