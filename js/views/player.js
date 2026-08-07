@@ -6,9 +6,11 @@ import {
   computeLeaderboard,
   computeEliminationEpisodes,
   computeCastSeasonPoints,
+  computeCastPointsBreakdownByWeek,
   getUsedSafePicks,
   SAFE_PICK_POINTS,
   PRESEASON_BONUS_POINTS,
+  SCORING_EVENT_LABELS,
 } from '../scoring.js';
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete, TARGET_ROSTER_SIZE } from '../draft.js';
 import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber, getCurrentEpisode, rostersReadyForEpisode } from './commissioner.js';
@@ -75,11 +77,22 @@ export function renderLeaderboard(container, state, currentManagerId) {
 
   const standings = computeLeaderboard(state);
   const maxTotal = Math.max(1, ...standings.map((s) => s.grandTotal));
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
 
   const rowsHtml = standings
     .map((row) => {
       const isYou = row.managerId === currentManagerId;
       const barPct = Math.max(4, Math.round((row.grandTotal / maxTotal) * 100));
+      const teamCastIds = currentRosterIds(state, row.managerId);
+      const teamText = teamCastIds.length
+        ? teamCastIds
+            .map((id) =>
+              eliminationEpisodes.has(id)
+                ? `<span class="lb-team-out">${castName(state, id)}</span>`
+                : castName(state, id)
+            )
+            .join(', ')
+        : '(no roster yet)';
       return `
         <div class="lb-row ${isYou ? 'you' : ''} ${row.rank === 1 ? 'rank-1' : ''}">
           <div class="lb-rank">${row.rank}</div>
@@ -87,6 +100,7 @@ export function renderLeaderboard(container, state, currentManagerId) {
             <div class="lb-name">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}</div>
             <div class="lb-bar-track"><div class="lb-bar-fill" style="width:${barPct}%"></div></div>
             <div class="lb-breakdown">This week +${row.thisWeekRosterPoints} &middot; Safe pick +${row.thisWeekSafePickPoints} &middot; Bonus +${row.bonusPoints}</div>
+            <div class="lb-team">Team: ${teamText}</div>
           </div>
           <div class="lb-total">${row.grandTotal}</div>
         </div>
@@ -138,7 +152,17 @@ function genderHintHtml(state, myRoster) {
   return `<p style="font-size:0.85rem; color:var(--text-muted);">You have ${mCount} guy(s), ${fCount} girl(s) so far &mdash; aiming for ${suggestion} next (not required)</p>`;
 }
 
-export function renderMyRoster(container, state, currentManagerId, { onPick, onPreseasonPick }) {
+/** Binds every `.cast-card` currently in `container` to open the stats modal on click — called
+ *  after each `container.innerHTML` assignment below, since My Roster has several early-return
+ *  branches (frozen, mid-draft, waiting, twist-hidden) rather than one shared render path. */
+function bindCastCardClicks(container, onCardClick) {
+  if (!onCardClick) return;
+  container.querySelectorAll('.cast-card').forEach((card) => {
+    card.addEventListener('click', () => onCardClick(card.dataset.castId));
+  });
+}
+
+export function renderMyRoster(container, state, currentManagerId, { onPick, onPreseasonPick, onCardClick }) {
   if (!currentManagerId) {
     container.innerHTML = `<p>Pick your identity above to see your roster.</p>`;
     return;
@@ -149,6 +173,7 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
       <p><strong>Rosters are frozen for the rest of the season.</strong></p>
       ${rosterCardsHtml(state, currentRosterIds(state, currentManagerId))}
     `;
+    bindCastCardClicks(container, onCardClick);
     return;
   }
 
@@ -188,6 +213,7 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
         ${rosterCardsHtml(state, myRoster)}
       `;
     }
+    bindCastCardClicks(container, onCardClick);
     return;
   }
 
@@ -201,6 +227,7 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
       <p><strong>Your Roster:</strong></p>
       ${rosterCardsHtml(state, currentRosterIds(state, currentManagerId))}
     `;
+    bindCastCardClicks(container, onCardClick);
     return;
   }
 
@@ -237,6 +264,7 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
         ${rosterCardsHtml(state, myRoster)}
       `;
     }
+    bindCastCardClicks(container, onCardClick);
     return;
   }
 
@@ -262,6 +290,7 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
       ${rosterCardsHtml(state, roster)}
     `;
   }
+  bindCastCardClicks(container, onCardClick);
 }
 
 /** Every cast member this manager has ever safe-picked, with the outcome once that week's
@@ -534,10 +563,40 @@ export function renderCastBrowser(container, state, { onCardClick } = {}) {
   }
 }
 
-/** Bio modal — opens from Cast Browser cards only (Safe Pick/My Roster reuse the same card
- *  markup but tapping those already submits a pick, so a second click meaning also holds no
- *  place there). Bio data is static reference content in bios.js, not part of the synced game
- *  state. Backdrop-click-to-close is bound once via a dataset flag since modalEl itself persists
+/** Week-by-week points breakdown for the stats modal — one block per finalized episode, each
+ *  line showing which event scored it and its subtotal (e.g. "Confessional x3: +15"), plus the
+ *  Survived-the-Week bonus when earned. Updates automatically as new episodes are finalized,
+ *  since it's computed fresh from computeCastPointsBreakdownByWeek rather than stored. */
+function castStatsHtml(state, castId) {
+  const weeks = computeCastPointsBreakdownByWeek(state, castId);
+  if (!weeks.length) return `<p class="bio-meta">No episodes scored yet.</p>`;
+  const weekBlocks = weeks
+    .map((w) => {
+      const eventLines = w.events
+        .map((e) => {
+          const label = SCORING_EVENT_LABELS[e.type] ?? e.type;
+          const countText = e.count > 1 ? ` x${e.count}` : '';
+          return `<li>${label}${countText}: ${e.points >= 0 ? '+' : ''}${e.points}</li>`;
+        })
+        .join('');
+      const survivedLine = w.survivedBonus ? `<li>Survived the week: +${w.survivedBonus}</li>` : '';
+      const emptyLine = !w.events.length && !w.survivedBonus ? `<li class="stats-none">Nothing logged</li>` : '';
+      return `
+        <div class="stats-week">
+          <div class="stats-week-header">Week ${w.week} <span>${w.total >= 0 ? '+' : ''}${w.total} pts</span></div>
+          <ul>${eventLines}${survivedLine}${emptyLine}</ul>
+        </div>
+      `;
+    })
+    .join('');
+  return `<div class="stats-breakdown"><h4>Weekly Stats</h4>${weekBlocks}</div>`;
+}
+
+/** Bio + stats modal — opens from both Cast Browser and My Roster cards (Safe Pick/Preseason
+ *  Bonus Pick still reuse the same card markup without a click handler, since tapping those
+ *  already submits a pick). Bio half is static reference content in bios.js; stats half is
+ *  computed fresh every open, so it updates automatically as new episodes get finalized.
+ *  Backdrop-click-to-close is bound once via a dataset flag since modalEl itself persists
  *  across renders (only its innerHTML is replaced) — same guard pattern as the identity
  *  triple-tap binding. */
 export function renderCastBioModal(modalEl, state, castId) {
@@ -555,6 +614,7 @@ export function renderCastBioModal(modalEl, state, castId) {
           <p>${bio.blurb}</p>
         `
         : `<p class="bio-meta">No bio on file yet.</p>`}
+      ${castStatsHtml(state, castId)}
     </div>
   `;
   modalEl.querySelector('#bio-close-btn').addEventListener('click', () => {

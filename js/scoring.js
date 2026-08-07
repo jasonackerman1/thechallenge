@@ -7,6 +7,9 @@
 // `drafts.weekly[week]` supplies Week 2 onward.
 
 export const SCORING_EVENT_POINTS = {
+  // +5 per occurrence, same as every other counted event — no longer a per-episode "most
+  // confessionals" bonus.
+  CONFESSIONAL: 5,
   WON_DAILY: 5,
   WON_ELIMINATION: 10,
   DQ_QUIT: -5,
@@ -14,38 +17,25 @@ export const SCORING_EVENT_POINTS = {
   CRIED: -5,
   MADE_OUT: 10,
   PUKED: -10,
-  // Worth 0 points per occurrence on its own — logged via the same Add Event UI as every other
-  // scoring event (select cast, count, Add Event), purely so computeMostConfessionalsCastIds
-  // below has something to count. The actual points come from the per-episode bonus.
-  CONFESSIONAL: 0,
+};
+
+/** Human-readable labels for the stats breakdown modal (My Roster) — SCORING_EVENT_POINTS' keys
+ *  are the wire/storage format, these are display-only. */
+export const SCORING_EVENT_LABELS = {
+  CONFESSIONAL: 'Confessional',
+  WON_DAILY: 'Won Daily Challenge',
+  WON_ELIMINATION: 'Won Elimination Challenge',
+  DQ_QUIT: 'DQ / Quit',
+  DQ_QUIT_INJURY: 'DQ / Quit (Injury)',
+  CRIED: 'Cried',
+  MADE_OUT: 'Made Out',
+  PUKED: 'Puked',
 };
 
 export const SURVIVED_WEEK_POINTS = 5;
 export const SAFE_PICK_POINTS = 10;
 export const FINAL_CHALLENGE_POINTS = { third: 10, second: 25, winner: 50 };
 export const PRESEASON_BONUS_POINTS = { first: 30, second: 20, third: 10 };
-// Whoever has the single highest confessional count in an episode gets this bonus. Ties (two or
-// more cast members sharing the max) all get it — no arbitrary tiebreaker.
-export const CONFESSIONAL_BONUS_POINTS = 5;
-
-/** Map<castId, count> of CONFESSIONAL-type scoring events logged for a single episode. */
-function confessionalCounts(episode) {
-  const counts = new Map();
-  for (const event of episode.scoringEvents ?? []) {
-    if (event.type !== 'CONFESSIONAL') continue;
-    counts.set(event.castId, (counts.get(event.castId) ?? 0) + (event.count ?? 1));
-  }
-  return counts;
-}
-
-/** Set<castId> tied for the most confessionals this episode (empty if nobody logged any). */
-export function computeMostConfessionalsCastIds(episode) {
-  const counts = confessionalCounts(episode);
-  if (counts.size === 0) return new Set();
-  const max = Math.max(...counts.values());
-  if (max === 0) return new Set();
-  return new Set([...counts.entries()].filter(([, count]) => count === max).map(([castId]) => castId));
-}
 
 /** Map<castId, episodeNumber> — the episode each cast member was eliminated in. */
 export function computeEliminationEpisodes(episodes) {
@@ -91,9 +81,6 @@ export function computeCastPointsForEpisode(episode, castId, rosteredThisWeek, e
   const eliminatedThisEpisode = isEliminatedAsOf(castId, episode.episodeNumber, eliminationEpisodes);
   if (rosteredThisWeek && !eliminatedThisEpisode) {
     points += SURVIVED_WEEK_POINTS;
-  }
-  if (computeMostConfessionalsCastIds(episode).has(castId)) {
-    points += CONFESSIONAL_BONUS_POINTS;
   }
   return points;
 }
@@ -201,6 +188,40 @@ export function computeCastSeasonPoints(state) {
     }
   }
   return points;
+}
+
+/** Per-week point breakdown for a single cast member, one entry per finalized episode (oldest
+ *  first): each logged event type that week (grouped, with its count and subtotal), the derived
+ *  Survived-the-Week bonus if earned, and the week's total (kept consistent with
+ *  computeCastPointsForEpisode/computeCastSeasonPoints above rather than re-derived by hand).
+ *  Used for the cast detail modal's week-by-week stats. */
+export function computeCastPointsBreakdownByWeek(state, castId) {
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  return finalizedWeeks(state)
+    .slice()
+    .sort((a, b) => a - b)
+    .map((week) => {
+      const episode = state.episodes.find((e) => e.episodeNumber === week);
+      const rosteredThisWeek = allRosteredCastIdsForWeek(state, week).has(castId);
+      const eventsByType = new Map();
+      for (const event of episode.scoringEvents ?? []) {
+        if (event.castId !== castId) continue;
+        const count = event.count ?? 1;
+        const entry = eventsByType.get(event.type) ?? { count: 0, points: 0 };
+        entry.count += count;
+        entry.points += (SCORING_EVENT_POINTS[event.type] ?? 0) * count;
+        eventsByType.set(event.type, entry);
+      }
+      const eliminatedThisEpisode = isEliminatedAsOf(castId, week, eliminationEpisodes);
+      const survivedBonus = rosteredThisWeek && !eliminatedThisEpisode ? SURVIVED_WEEK_POINTS : 0;
+      return {
+        week,
+        events: [...eventsByType.entries()].map(([type, { count, points }]) => ({ type, count, points })),
+        survivedBonus,
+        eliminatedThisEpisode,
+        total: computeCastPointsForEpisode(episode, castId, rosteredThisWeek, eliminationEpisodes),
+      };
+    });
 }
 
 /** Season-end only: preseason bonus pick points + final challenge points, per manager.

@@ -4,7 +4,6 @@
 import { TARGET_ROSTER_SIZE, flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete } from '../draft.js';
 import {
   SCORING_EVENT_POINTS,
-  CONFESSIONAL_BONUS_POINTS,
   FINAL_CHALLENGE_POINTS,
   computeEliminationEpisodes,
   computeEligibleCastIds,
@@ -379,10 +378,7 @@ export function renderEpisodeEntry(
   });
 
   const eventTypeOptions = Object.entries(SCORING_EVENT_POINTS)
-    .map(([type, points]) => {
-      const label = type === 'CONFESSIONAL' ? `CONFESSIONAL (+${CONFESSIONAL_BONUS_POINTS} bonus to whoever has the most this episode)` : `${type} (${points > 0 ? '+' : ''}${points})`;
-      return `<option value="${type}">${label}</option>`;
-    })
+    .map(([type, points]) => `<option value="${type}">${type} (${points > 0 ? '+' : ''}${points})</option>`)
     .join('');
 
   const castOptions = eligibleCast.map((c) => `<option value="${c.id}">${c.name} (${c.team})</option>`).join('');

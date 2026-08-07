@@ -202,11 +202,13 @@
     }
     .modal-card h3 { margin-top: 0; }
 
-    /* Cast Browser cards are tappable for a bio (Safe Pick/My Roster reuse the same card markup
-       but already use a tap to submit a pick, so this cursor hint is scoped to Cast Browser
-       only — it would be misleading elsewhere). */
-    #cast-browser-container .cast-card { cursor: pointer; }
-    .bio-card { position: relative; text-align: center; }
+    /* Cast Browser and My Roster cards are tappable for a bio + stats popup. Safe Pick/Preseason
+       Bonus Pick reuse the same card markup but already use a tap to submit a pick, so this
+       cursor hint is scoped to just the two read-only sections — it would be misleading
+       elsewhere. */
+    #cast-browser-container .cast-card,
+    #my-roster-container .cast-card { cursor: pointer; }
+    .bio-card { position: relative; text-align: center; max-height: 80vh; overflow-y: auto; }
     .bio-close {
       position: absolute;
       top: 8px;
@@ -230,6 +232,15 @@
       font-size: 0.85rem;
       margin: 4px 0;
     }
+
+    /* Weekly stats breakdown at the bottom of the bio modal — one card per finalized episode. */
+    .stats-breakdown { text-align: left; margin-top: 16px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px; }
+    .stats-breakdown h4 { margin: 0 0 8px; font-size: 0.9rem; }
+    .stats-week { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 8px 12px; margin-bottom: 8px; }
+    .stats-week-header { display: flex; justify-content: space-between; font-weight: 700; font-size: 0.85rem; margin-bottom: 4px; }
+    .stats-week-header span { color: var(--neon-blue); }
+    .stats-week ul { margin: 0; padding-left: 18px; font-size: 0.8rem; color: var(--text-muted); }
+    .stats-week li.stats-none { list-style: none; margin-left: -18px; }
 
     /* Leaderboard: a ranked list of cards rather than a plain table — big rank numeral, a
        progress bar sized relative to the leader's total (at-a-glance standing), gradient-text
@@ -272,6 +283,8 @@
     .lb-bar-track { height: 5px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden; }
     .lb-bar-fill { height: 100%; background: var(--brand-gradient); border-radius: 999px; }
     .lb-breakdown { font-size: 0.68rem; color: var(--text-muted); margin-top: 6px; }
+    .lb-team { font-size: 0.72rem; color: var(--text-dim, #b8bfd6); margin-top: 4px; line-height: 1.4; }
+    .lb-team .lb-team-out { color: var(--text-muted); text-decoration: line-through; }
     .lb-total {
       font-family: 'Anton', sans-serif;
       font-size: 1.8rem;

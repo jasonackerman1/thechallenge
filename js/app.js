@@ -170,6 +170,10 @@ function renderPlayerView() {
         draft.picks.push({ managerId, castId, round: nextSlot.round });
         return fresh;
       }),
+    onCardClick: (castId) => {
+      renderCastBioModal(els.castBioModal, currentState, castId);
+      els.castBioModal.style.display = 'flex';
+    },
   });
   renderSafePick(els.safePickContainer, currentState, currentManagerId, {
     onSubmitSafePick: (castId) =>
