@@ -1,6 +1,6 @@
 // Bump this whenever the precache list changes OR any file in NETWORK_FIRST_FILES changes shape
 // in a way that needs old caches evicted. Files in CACHE_FIRST_FILES rarely change once shipped.
-const CACHE_NAME = "challenge-fantasy-v1";
+const CACHE_NAME = "challenge-fantasy-v2";
 
 const CAST_SLUGS = [
   "adrienne", "anna-leigh", "bananas", "brad", "cara-maria", "cassidy", "cedric", "chris",
@@ -66,8 +66,12 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
 
   if (isNetworkFirst(url)) {
+    // `cache: 'no-store'` on the fetch itself, not just on the URL string — without it the
+    // browser's own HTTP cache can silently hand back a stale response even though this is a
+    // "network first" path, which can leave two network-first files (e.g. app.js + scoring.js)
+    // out of sync with each other after a deploy. Same bug class hit and fixed on the Storm PWA.
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request.url, { cache: "no-store" })
         .then((response) => {
           const copy = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
