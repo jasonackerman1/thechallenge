@@ -1,17 +1,20 @@
-# Project Status — updated 2026-08-01 (elimination scoring re-confirmed, Paramount+ pacing contingency noted)
+# Project Status — updated 2026-08-06 (confessional per-occurrence scoring, leaderboard team rosters, My Roster weekly-stats popup, service worker stale-cache fix)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**THE REAL SEASON IS LIVE. Twist has been revealed.** Jay has been through pre-draft, the real
-preseason draft, Episode 1 scoring, and has hit "Reveal Redraft Twist" — now doing his own
-end-to-end simulation pass through the rest of the season on his real Gist to confirm everything
-holds up before handing the app to the other 5 managers. Every mutation on the live Gist is real
-family data now, not test data.
+**THE REAL SEASON IS LIVE. Twist has been revealed. Episode 1 has been scored for real.** Jay ran
+the real preseason draft, everyone's in the app, and he's just finished scoring the first real
+episode on the live Gist — this is now steady-state support on a live season (small scoring-rule
+tweaks and UI polish as Jay actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `dbd8792` — fixed disabled reminder buttons that looked
-identical to enabled ones (see below) — on top of `67440ad` (Commissioner Reminders block:
+**Git status: clean and pushed.** Commit `0e769af` (2026-08-06) — service worker fix, see below —
+on top of `bc6fca9` (same day) — confessional bonus removed in favor of a flat +5 every time one
+is logged, commissioner's Add Event dropdown now defaults to Confessional, leaderboard rows now
+list each manager's current team roster, and My Roster cast cards are now clickable and open a
+stats popup with a week-by-week points breakdown (see below) — on top of `dbd8792` (fixed disabled
+reminder buttons that looked identical to enabled ones), `67440ad` (Commissioner Reminders block:
 clipboard-copy Safe Pick / Turn reminder buttons), `664fe64` (app icon replaced with the real
 biohazard symbol) — on top of `a4eb156` (Safe Pick hit cards now grey out like every other
 locked-out state), `5c1013f` (pre-share readiness pass: Refresh button + auto-refresh, offline
@@ -20,6 +23,50 @@ retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509a
 updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
 toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below).
 No local uncommitted changes, no untracked files, all on `origin/main`.
+
+## Confessional scoring changed to per-occurrence + weekly stats popup + a scary-but-transient connect-screen incident — 2026-08-06 (`bc6fca9`, `0e769af`)
+
+Jay finished scoring Episode 1 for real (draft done, everyone in the app, "everything looking
+good") and asked for three adjustments, all shipped in `bc6fca9`:
+
+- **Confessionals now score +5 every time one is logged**, not a one-time "+5 to whoever has the
+  most confessionals this episode" bonus. `CONFESSIONAL_BONUS_POINTS`/
+  `computeMostConfessionalsCastIds` deleted from `js/scoring.js`; `SCORING_EVENT_POINTS.CONFESSIONAL
+  = 5`. Since scoring always recomputes fresh from raw events (never cached), this retroactively
+  changed the value of any confessionals already logged for Episode 1 — worth Jay spot-checking
+  that episode's confessional tally against what the family already saw live.
+- **Commissioner's Add Event dropdown now defaults to Confessional** — moved to the top of the
+  `SCORING_EVENT_POINTS` object (the dropdown iterates insertion order), since Jay expects to
+  score that most often.
+- **Leaderboard rows now show each manager's current team roster** ("Team: Name1, Name2, ...",
+  eliminated cast struck through), and **My Roster cast cards are now clickable**, opening the
+  same bio modal Cast Browser uses, now extended with a "Weekly Stats" section — one block per
+  finalized episode showing exactly which event scored what (e.g. "Confessional x3: +15", "Cried:
+  -5", "Survived the week: +5"), computed fresh every time the modal opens. Full detail in project
+  memory `challenge_fantasy_app.md`.
+
+**Right after that push, Jay reported his phone's installed app reverted to the connect screen
+(asking for Token + Gist ID again) and the Connect button did nothing when he re-entered them.**
+Investigated live: GitHub Pages had built and deployed `bc6fca9` correctly (confirmed via the
+Pages API), and the served JS files matched the local repo byte-for-byte — so the deployed code
+itself was fine, and desktop confirmed this (Jay: "it works fine on the web on desktop"). That
+pointed at something device-local rather than a real code bug: the service worker's
+`NETWORK_FIRST_FILES` fetch handler in `sw.js` called `fetch(event.request)` with no explicit
+cache-control override, so the browser's own HTTP cache could silently serve back a stale response
+even on that "network first" path — risking two network-first files (e.g. `app.js` + `scoring.js`)
+ending up mismatched with each other right after a deploy, which breaks the JS module graph and
+would explain both symptoms exactly (stuck on the default connect-screen markup, and a dead
+Connect button with no listener ever attached). **This is the identical bug class already found
+and fixed on the Storm PWA** — see that project's memory. Fixed in `sw.js`: fetch now uses
+`{ cache: "no-store" }` explicitly, and `CACHE_NAME` bumped to `challenge-fantasy-v2` so every
+device gets a clean cache on its next successful load. Pushed as `0e769af`.
+**Before that fix even went out, Jay reopened the app on his own and it was back to normal without
+asking for credentials again** — so the underlying trigger may have been a transient blip (or
+resolved itself once the SW/cache settled), not something that was ever confirmed to reproduce.
+Treat the `sw.js` fix as hardening for a real latent bug class, not a confirmed root-cause fix for
+this specific incident — if it recurs for Jay or any of the other 5 managers, the fix is to clear
+that browser's site data for the app (or delete/reinstall the home-screen icon) and re-enter
+Token + Gist ID once.
 
 ## Scoring question re-confirmed + a real-world pacing contingency noted — 2026-08-01
 
