@@ -6,6 +6,8 @@
 // format described in the plan). `drafts.preseason` supplies Week 1's rosters;
 // `drafts.weekly[week]` supplies Week 2 onward.
 
+import { flattenDraftBoard } from './draft.js';
+
 export const SCORING_EVENT_POINTS = {
   // +5 per occurrence, same as every other counted event — no longer a per-episode "most
   // confessionals" bonus.
@@ -143,8 +145,33 @@ function tiebreakRosterPointsOnly(state, managerId) {
   );
 }
 
-/** Standings: active managers sorted by cumulative total desc, tiebreak by roster-points-only,
- *  then alphabetical by name (assumption #2 in the plan). */
+function draftSourceForWeek(state, week) {
+  return week === 1 ? state.drafts.preseason : state.drafts.weekly?.[String(week)];
+}
+
+/** Tiebreak signal: this manager's single latest (worst) pick slot in the draft that set the
+ *  rosters currently earning points (preseason for week 1, otherwise that week's redraft).
+ *  Draft slots are fixed by the board itself, not by which picks were actually made. Deliberately
+ *  NOT an average — a snake board with an even number of rounds is symmetric by design, so every
+ *  manager's average position ties exactly and never breaks anything. Each global slot index
+ *  belongs to exactly one manager, so no two managers can ever share the same max slot — this
+ *  can never itself produce a tie (short of a manager somehow having zero picks in that draft).
+ *  Higher (later/worse pick) wins, on the theory that less draft selection to work with and still
+ *  matching the score deserves the tiebreak nod. */
+function tiebreakDraftDisadvantage(state, managerId) {
+  const weeks = finalizedWeeks(state);
+  if (!weeks.length) return 0;
+  const source = draftSourceForWeek(state, Math.max(...weeks));
+  if (!source?.board) return 0;
+  const positions = flattenDraftBoard(source.board)
+    .map((slot, index) => (slot.managerId === managerId ? index : null))
+    .filter((index) => index !== null);
+  return positions.length ? Math.max(...positions) : 0;
+}
+
+/** Standings: active managers sorted by cumulative total desc, then by roster-points-only,
+ *  then by draft disadvantage (later worst-pick slot wins), then alphabetical by name as the
+ *  final, near-never-reached fallback. */
 export function computeStandings(state) {
   const totals = computeCumulativeTotals(state);
   return state.managers
@@ -154,8 +181,15 @@ export function computeStandings(state) {
       name: m.name,
       total: totals.get(m.id) ?? 0,
       rosterPointsOnly: tiebreakRosterPointsOnly(state, m.id),
+      draftDisadvantage: tiebreakDraftDisadvantage(state, m.id),
     }))
-    .sort((a, b) => b.total - a.total || b.rosterPointsOnly - a.rosterPointsOnly || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        b.total - a.total ||
+        b.rosterPointsOnly - a.rosterPointsOnly ||
+        b.draftDisadvantage - a.draftDisadvantage ||
+        a.name.localeCompare(b.name)
+    );
 }
 
 /** Draft order for the next weekly redraft: reverse standings (last place first). Only
