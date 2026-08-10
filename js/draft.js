@@ -101,6 +101,31 @@ export function isDraftComplete(board, picks, allCastIds, eliminatedCastIds) {
 }
 
 /**
+ * Rewrites a draft board's not-yet-reached slots to a freshly correct manager order — for when
+ * standings (and therefore the reverse-standings draft order) change after the board was already
+ * snapshotted, e.g. a scoring/tiebreak fix landing mid-redraft. Every already-made pick, and every
+ * already-consumed slot in the round currently in progress, is left completely untouched — only
+ * rounds/slots nobody has picked in yet get reordered. `freshOrder` must contain the exact same
+ * set of managerIds each affected round already has, just in the corrected sequence.
+ */
+export function reorderRemainingSlots(board, picks, freshOrder) {
+  const flat = flattenDraftBoard(board);
+  const nextSlot = flat[picks.length];
+  if (!nextSlot) return board; // draft already complete, nothing left to reorder
+
+  const newBoard = board.map((round) => [...round]);
+  for (let round = nextSlot.round; round < newBoard.length; round++) {
+    const doneIds = [...new Set(picks.filter((p) => p.round === round).map((p) => p.managerId))];
+    const remaining = freshOrder.filter((id) => !doneIds.includes(id));
+    if (doneIds.length + remaining.length !== newBoard[round].length) {
+      throw new Error('The manager list has changed since this draft started — cannot safely reorder.');
+    }
+    newBoard[round] = [...doneIds, ...remaining];
+  }
+  return newBoard;
+}
+
+/**
  * Validates a pick attempt against freshly-fetched draft state (per plan §3, this must be
  * called with state just fetched from the Gist, not a stale in-memory copy, so the
  * exclusivity check is race-free). Throws a descriptive Error if invalid.

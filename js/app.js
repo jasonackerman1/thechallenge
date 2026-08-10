@@ -6,7 +6,7 @@ import { loadCredentials, saveCredentials, loadCachedState, saveCachedState, loa
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
 import { computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks } from './scoring.js';
-import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
+import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, reorderRemainingSlots, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
 import {
   renderPreseasonDraft,
   renderEpisodeEntry,
@@ -275,6 +275,15 @@ function renderRedraft() {
       runMutation((fresh) => {
         const week = getCurrentRedraftWeek(fresh);
         if (week) delete fresh.drafts.weekly[String(week)];
+        return fresh;
+      }),
+    onFixRedraftOrder: () =>
+      runMutation((fresh) => {
+        const week = getCurrentRedraftWeek(fresh);
+        const draft = fresh.drafts.weekly[String(week)];
+        const freshOrder = computeNextDraftOrder(fresh);
+        if (!freshOrder) throw new Error('Rosters are frozen.');
+        draft.board = reorderRemainingSlots(draft.board, draft.picks, freshOrder);
         return fresh;
       }),
     onToggleFreeze: () =>

@@ -14,7 +14,7 @@ import { managerName, castName } from './shared.js';
 
 /** Shared snake-draft pick UI — used for both the preseason draft and every weekly redraft.
  *  `idPrefix` keeps element ids distinct when both sections render on the same page. */
-function renderDraftPicker(container, state, { board, picks, eliminatedCastIds, idPrefix, headerHtml, resetLabel, onPick, onReset }) {
+function renderDraftPicker(container, state, { board, picks, eliminatedCastIds, idPrefix, headerHtml, resetLabel, onPick, onReset, onFixOrder }) {
   const allCastIds = state.cast.map((c) => c.id);
   const flat = flattenDraftBoard(board);
   const complete = isDraftComplete(board, picks, allCastIds, eliminatedCastIds);
@@ -65,10 +65,16 @@ function renderDraftPicker(container, state, { board, picks, eliminatedCastIds, 
     `;
   }
 
+  const fixOrderBtnHtml =
+    onFixOrder && !complete
+      ? `<button id="${idPrefix}-fix-order-btn">Sync Remaining Draft Order to Current Standings</button>`
+      : '';
+
   container.innerHTML = `
     ${headerHtml}
     <ul>${rosterList}</ul>
     ${pickHtml}
+    ${fixOrderBtnHtml}
     <button id="${idPrefix}-reset-btn" style="background:#7a2020;">${resetLabel}</button>
   `;
 
@@ -77,6 +83,18 @@ function renderDraftPicker(container, state, { board, picks, eliminatedCastIds, 
       const nextSlot = flat[picks.length];
       const castId = container.querySelector(`#${idPrefix}-pick-select`).value;
       onPick({ managerId: nextSlot.managerId, castId, round: nextSlot.round });
+    });
+  }
+
+  if (onFixOrder && !complete) {
+    container.querySelector(`#${idPrefix}-fix-order-btn`).addEventListener('click', () => {
+      if (
+        confirm(
+          'Reorder the picks nobody has made yet to match current standings? Every pick already made stays exactly as-is — this only fixes who drafts next.'
+        )
+      ) {
+        onFixOrder();
+      }
     });
   }
 
@@ -206,7 +224,7 @@ function attachTwistListener(container, state, onToggleTwistRevealed) {
   });
 }
 
-export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onToggleFreeze, onToggleTwistRevealed }) {
+export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onFixRedraftOrder, onToggleFreeze, onToggleTwistRevealed }) {
   const currentWeek = getCurrentRedraftWeek(state);
   const statusHtml = `${scarcityBannerHtml(state)}${twistControlHtml(state)}${freezeControlHtml(state)}`;
 
@@ -262,6 +280,7 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
     onReset: () => {
       if (confirm(`Reset the Week ${currentWeek} redraft? This clears every pick made so far.`)) onResetRedraft();
     },
+    onFixOrder: onFixRedraftOrder,
   });
   attachFreezeListener(container, state, onToggleFreeze);
   attachTwistListener(container, state, onToggleTwistRevealed);
