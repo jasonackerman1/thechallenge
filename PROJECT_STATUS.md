@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-09 (standings tiebreak redesigned: draft position, not alphabetical)
+# Project Status — updated 2026-08-09 (Commissioner "Sync Remaining Draft Order" safety-valve added after the tiebreak fix went stale mid-redraft)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -6,24 +6,91 @@ that first for the complete data model, sync strategy, and UI spec.
 
 **THE REAL SEASON IS LIVE. Twist has been revealed. Episode 1 has been scored for real.** Jay ran
 the real preseason draft, everyone's in the app, and finished scoring the first real episode on
-the live Gist. The Week 2 redraft has been announced and started, but as of this update the
-managers who pick first haven't actually drafted yet — this is steady-state support on a live
-season (small scoring-rule tweaks and UI polish as Jay actually uses the app), not a build phase.
+the live Gist. The Week 2 redraft is underway — at least one full round has actually been drafted
+as of this update — this is steady-state support on a live season (small scoring-rule tweaks and
+UI polish as Jay actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `6a4886f` (2026-08-09) — standings tiebreak redesigned,
-see below — on top of `0e769af` (2026-08-06, service worker fix) and `bc6fca9` (same day —
-confessional bonus removed in favor of a flat +5 every time one is logged, commissioner's Add
-Event dropdown now defaults to Confessional, leaderboard rows now list each manager's current team
-roster, and My Roster cast cards are now clickable and open a stats popup with a week-by-week
-points breakdown) — on top of `dbd8792` (fixed disabled reminder buttons that looked identical to
-enabled ones), `67440ad` (Commissioner Reminders block: clipboard-copy Safe Pick / Turn reminder
-buttons), `664fe64` (app icon replaced with the real biohazard symbol) — on top of `a4eb156` (Safe
-Pick hit cards now grey out like every other locked-out state), `5c1013f` (pre-share readiness
-pass: Refresh button + auto-refresh, offline retry, multi-episode reopen, iPad orientation unlock),
-`5fa98d1`/`a928615`/`509ac61`/`3d0e355`/`da6eaea` (confessional-count rework, Season Status banner,
-a cut Gist API request, status doc updates), `2e03116` (Commissioner panel visual design pass),
-`0145a21` (redraft-twist reveal toggle), and everything before that (PWA shell, Milestone 4, etc. —
-see history further below). No local uncommitted changes, no untracked files, all on `origin/main`.
+**Git status: clean and pushed.** Commit `88dcc02` (2026-08-09) — Commissioner "Sync Remaining
+Draft Order" button, see below — on top of `6a4886f` (same day, standings tiebreak redesigned) and
+`0e769af`/`bc6fca9` (2026-08-06, service worker fix + confessional bonus removed in favor of a flat
++5 every time one is logged, commissioner's Add Event dropdown now defaults to Confessional,
+leaderboard rows now list each manager's current team roster, and My Roster cast cards are now
+clickable and open a stats popup with a week-by-week points breakdown) — on top of `dbd8792` (fixed
+disabled reminder buttons that looked identical to enabled ones), `67440ad` (Commissioner Reminders
+block: clipboard-copy Safe Pick / Turn reminder buttons), `664fe64` (app icon replaced with the real
+biohazard symbol) — on top of `a4eb156` (Safe Pick hit cards now grey out like every other
+locked-out state), `5c1013f` (pre-share readiness pass: Refresh button + auto-refresh, offline
+retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509ac61`/`3d0e355`/
+`da6eaea` (confessional-count rework, Season Status banner, a cut Gist API request, status doc
+updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
+toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below). No
+local uncommitted changes, no untracked files, all on `origin/main`.
+
+## Redraft order went stale mid-draft from the tiebreak fix — new Commissioner safety-valve — 2026-08-09 (`88dcc02`)
+
+Direct fallout from the tiebreak fix below, same day. The Week 2 redraft board is a one-time
+snapshot (`onStartRedraft` in `js/app.js` captures `computeNextDraftOrder(state)` once, at the
+moment "Start Redraft" is clicked) — it never gets recomputed afterward. Jay clicked Start *before*
+the tiebreak fix landed, so the board locked in the stale order (Owen ahead of Jay). Once the
+tiebreak fix flipped the standings, Jay became the worse-ranked one of the pair — reverse-standings
+says he should now draft first — but the saved board didn't know that, and by then several managers
+had already actually drafted, so a plain Reset (wipes every pick) wasn't acceptable. Jay's exact
+ask: fix it "without fucking up everyone who's already drafted."
+
+Built `reorderRemainingSlots(board, picks, freshOrder)` in `js/draft.js` — pure function, no I/O.
+Finds the next not-yet-reached slot, then for that round and every round after it, keeps whoever
+already picked *in that specific round* exactly where they are (derived from the real `picks` log)
+and replaces the rest of that round's order with the freshly correct standings order, filtered to
+just the not-yet-picked managers. Every earlier round and every already-recorded pick is completely
+untouched. Verified with three synthetic Node tests before trusting it: the exact Jay/Owen shape,
+a manager who's already picked partway through the current round, and an already-complete draft
+(safe no-op).
+
+Exposed as a new Commissioner button, **"Sync Remaining Draft Order to Current Standings"**, in the
+Weekly Redraft panel — confirm-gated, plain-language scope. Deliberately not exposed on the
+preseason draft (its round-1 order is random, not standings-based, so there's no "correct" order to
+sync to). Jay used it live and confirmed it worked — the "waiting on" indicator flipped to Jay
+immediately, with zero effect on anyone's already-made picks.
+
+**Follow-up question worth remembering the answer to:** is this fix visible to the rest of the
+family? No — the app only shows "whose turn is it now," not a history of who used to be scheduled
+next, and nobody had actually picked in that slot yet, so there's no trace anywhere that the order
+ever pointed to Owen. Only Jay saw the stale state, briefly, before applying the fix.
+
+**Architectural note:** any board/order captured as a one-time snapshot (this redraft board, and by
+extension the preseason board) won't automatically pick up a later scoring/standings logic change.
+If another scoring-rule fix ever lands mid-draft again, the same staleness could recur —
+`reorderRemainingSlots` is now a general, reusable tool for that, not a one-off patch.
+
+## Standings tiebreak redesigned: draft position instead of alphabetical — 2026-08-09 (`6a4886f`)
+
+Jay noticed Jay and Owen were tied 115-115 on the leaderboard but Jay showed in first place, and
+asked why. Root cause: both managers also tied on the existing secondary tiebreak
+(roster-points-only — 105 = 105, from an identical 105 roster points + 10 Safe Pick each), so the
+sort fell all the way to alphabetical-by-name — which Jay flagged as a real oversight, not
+something that should decide a tie.
+
+Presented three options (split event points from the flat survival bonus / draft position — later
+pick wins / coin flip) and Jay picked **draft position**. `js/scoring.js`'s `computeStandings` sort
+is now `total → rosterPointsOnly → draftDisadvantage → name`, where `draftDisadvantage` is each
+manager's single **latest (worst) pick slot** in the draft that set the currently-scored roster
+(preseason for week 1, that week's redraft afterward) — draft board slots are fixed upfront by
+`flattenDraftBoard(board)`, independent of which picks were actually made.
+
+**Caught a real bug in the first draft of this before shipping:** the first version used each
+manager's *average* pick position, which is mathematically guaranteed to tie for every manager in
+this app's exact draft shape — a snake board (`buildDraftBoard`) with an even round count
+(`TARGET_ROSTER_SIZE = 4`) is symmetric by design, so average position is identical for everyone.
+Confirmed via a synthetic Node test using the app's own `buildDraftBoard`. Switched to each
+manager's single worst (max-index) slot instead — since every slot index belongs to exactly one
+manager, two managers' maxes can never collide, so this layer can never itself tie. Re-verified
+with the same test after the fix.
+
+Live result after Jay refreshed: **Owen now shows first, Jay second** — Owen's last draft pick came
+at a later position (less selection left) than Jay's, so he gets credit for matching the score with
+a tougher hand. Not verified against Jay's actual live pick-slot data (no Gist access this
+session) — only the mechanism itself was tested. Full writeup in project memory
+`challenge_fantasy_app.md`.
 
 ## Standings tiebreak redesigned: draft position instead of alphabetical — 2026-08-09 (`6a4886f`)
 
