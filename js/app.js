@@ -213,7 +213,7 @@ function renderPlayerView() {
       runMutation((fresh) => {
         const managerId = loadPlayerIdentity();
         if (isPreseasonBonusPickLocked(fresh)) {
-          throw new Error('Winter Circle picks are locked — Episode 1 has already been finalized.');
+          throw new Error('Winners Circle picks are locked — Episode 1 has already been finalized.');
         }
         const existing = fresh.preseasonPicks.find((p) => p.managerId === managerId);
         if (existing) {

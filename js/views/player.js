@@ -398,7 +398,7 @@ function bonusPickCardsHtml(state, pick) {
 
 export function renderPreseasonBonusPick(container, state, currentManagerId, { onSubmit }) {
   if (!currentManagerId) {
-    container.innerHTML = `<p>Pick your identity above to make your Winter Circle pick.</p>`;
+    container.innerHTML = `<p>Pick your identity above to make your Winners Circle pick.</p>`;
     return;
   }
 
@@ -407,11 +407,11 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
 
   if (locked) {
     if (!existingPick) {
-      container.innerHTML = `<p>Winter Circle picks are locked (Episode 1 is finalized). You didn't submit one.</p>`;
+      container.innerHTML = `<p>Winners Circle picks are locked (Episode 1 is finalized). You didn't submit one.</p>`;
       return;
     }
     container.innerHTML = `
-      <p><strong>Your Winter Circle pick (locked):</strong></p>
+      <p><strong>Your Winners Circle pick (locked):</strong></p>
       ${bonusPickCardsHtml(state, existingPick)}
     `;
     return;
@@ -431,7 +431,7 @@ export function renderPreseasonBonusPick(container, state, currentManagerId, { o
       <label>2nd Place<select id="bonus-second-select">${castOptions(existingPick?.second)}</select></label>
       <label>3rd Place<select id="bonus-third-select">${castOptions(existingPick?.third)}</select></label>
     </div>
-    <button id="bonus-submit-btn">${existingPick ? 'Change Pick' : 'Submit Winter Circle Pick'}</button>
+    <button id="bonus-submit-btn">${existingPick ? 'Change Pick' : 'Submit Winners Circle Pick'}</button>
   `;
 
   container.querySelector('#bonus-submit-btn').addEventListener('click', () => {
