@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-09 (Commissioner "Sync Remaining Draft Order" safety-valve added after the tiebreak fix went stale mid-redraft)
+# Project Status — updated 2026-08-11 (final challenge placements now support team ties, not just one winner)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -10,7 +10,8 @@ the live Gist. The Week 2 redraft is underway — at least one full round has ac
 as of this update — this is steady-state support on a live season (small scoring-rule tweaks and
 UI polish as Jay actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `88dcc02` (2026-08-09) — Commissioner "Sync Remaining
+**Git status: clean and pushed.** Commit `35ffd5e` (2026-08-11) — final challenge placements now
+support team ties, see below — on top of `88dcc02` (2026-08-09) — Commissioner "Sync Remaining
 Draft Order" button, see below — on top of `6a4886f` (same day, standings tiebreak redesigned) and
 `0e769af`/`bc6fca9` (2026-08-06, service worker fix + confessional bonus removed in favor of a flat
 +5 every time one is logged, commissioner's Add Event dropdown now defaults to Confessional,
@@ -25,6 +26,32 @@ retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509a
 updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
 toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below). No
 local uncommitted changes, no untracked files, all on `origin/main`.
+
+## Final challenge placements now support team ties — 2026-08-11 (`35ffd5e`)
+
+Jay flagged this ahead of actually needing it: the Commissioner's final-challenge scoring UI
+(winner/2nd/3rd) only ever let you pick one cast member per placement, but *the final itself is a
+team format* — it's realistic that an entire team ties for 1st (or 2nd, or 3rd), not just one
+person. He was explicit that Winter Circle (the preseason 1st/2nd/3rd prediction pick) did NOT
+need to change — "as long as somebody from the team was picked you get the bonus" — since that's
+already a single guessed person being checked against whatever the actual result turns out to be.
+
+Changed `state.finalChallenge.winner`/`second`/`third` from a single castId each to an array of
+castIds (usually length 1, longer when a team ties). Commissioner entry (`renderFinalChallengeEntry`
+in `js/views/commissioner.js`) is now three checkbox groups (reusing the existing
+`checkbox-grid`/`checkbox-row` pattern already used for episode eliminations) instead of three
+`<select>` dropdowns — check everyone who shares a placement. Validation: at least one person
+required per placement, and the same person can't be checked into more than one placement.
+
+`js/scoring.js`'s `computeSeasonEndBonusPoints` updated to match: roster-ownership points
+(`FINAL_CHALLENGE_POINTS`) are awarded **per rostered person** — a manager who rostered two members
+of a 3-way tied winning team gets the winner bonus twice, not once — and Winter Circle prediction
+hits now check `group.includes(pick.first)` etc. instead of `pick.first === winner`, so a single
+guessed person still scores a hit if they land anywhere in that placement's group. `js/views/
+player.js`'s locked Winter Circle display (`bonusPickCardsHtml`) updated the same way for its own
+"&#10003; correct" marker. Verified the scoring math directly with a synthetic Node test (a 2-person
+tied winner group, mixed rosters, overlapping predictions) before considering this done — no live
+Gist test yet since the season hasn't reached the final.
 
 ## Redraft order went stale mid-draft from the tiebreak fix — new Commissioner safety-valve — 2026-08-09 (`88dcc02`)
 
