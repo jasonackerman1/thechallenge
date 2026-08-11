@@ -245,7 +245,7 @@ function renderFinalChallenge() {
       }),
     onResetFinalChallenge: () =>
       runMutation((fresh) => {
-        fresh.finalChallenge = { completed: false, winner: null, second: null, third: null };
+        fresh.finalChallenge = { completed: false, winner: [], second: [], third: [] };
         return fresh;
       }),
   });

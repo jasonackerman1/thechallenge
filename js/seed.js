@@ -57,7 +57,7 @@ export function buildInitialState({ commissionerPasswordHash }) {
     cast,
     preseasonPicks: [],
     episodes: [],
-    finalChallenge: { completed: false, third: null, second: null, winner: null },
+    finalChallenge: { completed: false, third: [], second: [], winner: [] },
     drafts: { preseason: null, weekly: {} },
     safePicks: {},
   };

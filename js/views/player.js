@@ -388,7 +388,7 @@ function bonusPickCardsHtml(state, pick) {
   ];
   const cards = slots
     .map(({ label, castId, actual }) => {
-      const hit = resultsKnown && castId === actual;
+      const hit = resultsKnown && (actual ?? []).includes(castId);
       const statusText = resultsKnown ? `${label} ${hit ? '&#10003; correct' : ''}` : label;
       return castCardHtml(state, castId, { points: seasonPoints.get(castId) ?? 0, statusText, eliminated: eliminationEpisodes.has(castId) });
     })

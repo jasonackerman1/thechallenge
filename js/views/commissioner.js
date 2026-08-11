@@ -472,8 +472,13 @@ export function renderEpisodeEntry(
   });
 }
 
+/** The final is a team format — an entire team can tie for a placement, not just one person —
+ *  so each of winner/2nd/3rd is a *group* of cast members (usually one, sometimes several).
+ *  Everyone in a group scores that placement's roster-ownership points independently; a Winter
+ *  Circle prediction is still just one guessed person, credited as a hit if they land anywhere
+ *  in that group. */
 export function renderFinalChallengeEntry(container, state, { onSetFinalChallenge, onResetFinalChallenge }) {
-  const fc = state.finalChallenge ?? { completed: false, winner: null, second: null, third: null };
+  const fc = state.finalChallenge ?? { completed: false, winner: [], second: [], third: [] };
 
   if (fc.completed) {
     const bonusPoints = computeSeasonEndBonusPoints(state);
@@ -481,10 +486,11 @@ export function renderFinalChallengeEntry(container, state, { onSetFinalChalleng
       .filter((m) => m.active)
       .map((m) => `<li>${m.name}: ${bonusPoints.get(m.id) ?? 0} bonus pt(s)</li>`)
       .join('');
+    const namesFor = (castIds) => joinNames((castIds ?? []).map((id) => castName(state, id)));
     container.innerHTML = `
-      <p><strong>Winner:</strong> ${castName(state, fc.winner)} (+${FINAL_CHALLENGE_POINTS.winner} to whoever rostered them)</p>
-      <p><strong>2nd:</strong> ${castName(state, fc.second)} (+${FINAL_CHALLENGE_POINTS.second})</p>
-      <p><strong>3rd:</strong> ${castName(state, fc.third)} (+${FINAL_CHALLENGE_POINTS.third})</p>
+      <p><strong>Winner(s):</strong> ${namesFor(fc.winner)} (+${FINAL_CHALLENGE_POINTS.winner} each, to whoever rostered them)</p>
+      <p><strong>2nd:</strong> ${namesFor(fc.second)} (+${FINAL_CHALLENGE_POINTS.second} each)</p>
+      <p><strong>3rd:</strong> ${namesFor(fc.third)} (+${FINAL_CHALLENGE_POINTS.third} each)</p>
       <h4>Season-End Bonus Points (final challenge + preseason predictions)</h4>
       <ul>${breakdown}</ul>
       <button id="reset-final-challenge-btn" style="background:#7a2020;">Reset Final Challenge Results</button>
@@ -498,25 +504,50 @@ export function renderFinalChallengeEntry(container, state, { onSetFinalChalleng
   }
 
   const eligibleCast = state.cast.filter((c) => !computeEliminationEpisodes(state.episodes).has(c.id));
-  const castOptions = eligibleCast.map((c) => `<option value="${c.id}">${c.name} (${c.team})</option>`).join('');
+  const checkboxGroup = (groupId, selectedIds) =>
+    eligibleCast
+      .map(
+        (c) => `<label class="checkbox-row">
+          <input type="checkbox" data-fc-group="${groupId}" value="${c.id}" ${(selectedIds ?? []).includes(c.id) ? 'checked' : ''} /> ${c.name} (${c.team})
+        </label>`
+      )
+      .join('');
 
   container.innerHTML = `
-    <p>Enter the final challenge's top 3 finishers (from remaining cast). Points go to whoever
-    rosters them on their final roster: winner +${FINAL_CHALLENGE_POINTS.winner}, 2nd +${FINAL_CHALLENGE_POINTS.second}, 3rd +${FINAL_CHALLENGE_POINTS.third}.</p>
+    <p>Enter the final challenge's top 3 finishers (from remaining cast). If the whole team ties for
+    a placement, check everyone who shares it. Points go to whoever rosters them on their final
+    roster, per person: winner +${FINAL_CHALLENGE_POINTS.winner}, 2nd +${FINAL_CHALLENGE_POINTS.second}, 3rd +${FINAL_CHALLENGE_POINTS.third}.</p>
     <div class="control-row">
-      <select id="fc-winner-select">${castOptions}</select>
-      <select id="fc-second-select">${castOptions}</select>
-      <select id="fc-third-select">${castOptions}</select>
+      <div>
+        <h4>Winner(s)</h4>
+        <div class="checkbox-grid">${checkboxGroup('winner', fc.winner)}</div>
+      </div>
+      <div>
+        <h4>2nd Place</h4>
+        <div class="checkbox-grid">${checkboxGroup('second', fc.second)}</div>
+      </div>
+      <div>
+        <h4>3rd Place</h4>
+        <div class="checkbox-grid">${checkboxGroup('third', fc.third)}</div>
+      </div>
     </div>
     <button id="save-final-challenge-btn">Save Final Challenge Results</button>
   `;
 
+  const checkedIds = (groupId) =>
+    [...container.querySelectorAll(`input[data-fc-group="${groupId}"]:checked`)].map((el) => el.value);
+
   container.querySelector('#save-final-challenge-btn').addEventListener('click', () => {
-    const winner = container.querySelector('#fc-winner-select').value;
-    const second = container.querySelector('#fc-second-select').value;
-    const third = container.querySelector('#fc-third-select').value;
-    if (new Set([winner, second, third]).size < 3) {
-      alert('Winner, 2nd, and 3rd must be three different cast members.');
+    const winner = checkedIds('winner');
+    const second = checkedIds('second');
+    const third = checkedIds('third');
+    if (!winner.length || !second.length || !third.length) {
+      alert('Pick at least one cast member for winner, 2nd, and 3rd.');
+      return;
+    }
+    const allIds = [...winner, ...second, ...third];
+    if (new Set(allIds).size < allIds.length) {
+      alert('A cast member can only occupy one placement — someone is checked in more than one group.');
       return;
     }
     if (confirm('Save final challenge results? This locks in season-end bonus points.')) {
