@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-11 (final challenge placements now support team ties, not just one winner)
+# Project Status — updated 2026-08-11 (Winter Circle renamed to Winners Circle; final-challenge elimination filtering confirmed already working)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -10,9 +10,11 @@ the live Gist. The Week 2 redraft is underway — at least one full round has ac
 as of this update — this is steady-state support on a live season (small scoring-rule tweaks and
 UI polish as Jay actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `35ffd5e` (2026-08-11) — final challenge placements now
-support team ties, see below — on top of `88dcc02` (2026-08-09) — Commissioner "Sync Remaining
-Draft Order" button, see below — on top of `6a4886f` (same day, standings tiebreak redesigned) and
+**Git status: clean and pushed.** Commit `ade654c` (2026-08-11) — "Winter Circle" renamed to
+"Winners Circle" (display text only), see below — on top of `35ffd5e` (same day, final challenge
+placements now support team ties, see below) — on top of `88dcc02` (2026-08-09) — Commissioner
+"Sync Remaining Draft Order" button, see below — on top of `6a4886f` (same day, standings tiebreak
+redesigned) and
 `0e769af`/`bc6fca9` (2026-08-06, service worker fix + confessional bonus removed in favor of a flat
 +5 every time one is logged, commissioner's Add Event dropdown now defaults to Confessional,
 leaderboard rows now list each manager's current team roster, and My Roster cast cards are now
@@ -26,6 +28,30 @@ retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509a
 updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
 toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below). No
 local uncommitted changes, no untracked files, all on `origin/main`.
+
+## "Winter Circle" renamed to "Winners Circle" + final-challenge elimination filtering confirmed — 2026-08-11 (`ade654c`)
+
+Jay asked for two things after seeing the final-challenge checkbox UI (above) live: (1) rename
+"Winter Circle" to "Winners Circle," and (2) have the final-challenge checklist shrink as cast
+members get eliminated, so the commissioner isn't picking a winner from a list that still includes
+people long voted off.
+
+**(1) Rename — done, display text only.** Same pattern as the earlier "Preseason Bonus Pick" →
+"Winter Circle" rename: internal names (`renderPreseasonBonusPick`, `PRESEASON_BONUS_POINTS`,
+`preseasonPicks` state field, `bonus-pick-container` id) are untouched. 6 user-facing strings
+updated across `index.html`, `js/app.js`, `js/views/player.js`.
+
+**(2) Elimination filtering — checked before changing anything, turned out to already be correct,
+no code change needed.** `renderFinalChallengeEntry`'s cast list was already built from
+`state.cast.filter((c) => !computeEliminationEpisodes(state.episodes).has(c.id))` — this reads
+`state.episodes` directly (not `finalizedWeeks()`), so a cast member drops off the checklist the
+moment their elimination is saved via "Save Eliminations" in Episode Entry, even before that
+episode is finalized. Verified directly with a synthetic Node test (elimination recorded on an
+*unfinalized* episode still correctly excluded from the eligible-cast list) rather than just
+re-reading the code and assuming it was fine. If Jay is seeing the full cast list, the most likely
+explanation is that no eliminations have been saved yet this season (still early, Week 2) — not a
+bug in this screen. Told him this directly rather than silently claiming a fix for something that
+wasn't broken.
 
 ## Final challenge placements now support team ties — 2026-08-11 (`35ffd5e`)
 
