@@ -1,17 +1,23 @@
-# Project Status — updated 2026-08-11 (Winter Circle renamed to Winners Circle; final-challenge elimination filtering confirmed already working)
+# Project Status — updated 2026-08-13 (Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks with a Boy/Girl/Both day-type toggle)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
 that first for the complete data model, sync strategy, and UI spec.
 
-**THE REAL SEASON IS LIVE. Twist has been revealed. Episode 1 has been scored for real.** Jay ran
-the real preseason draft, everyone's in the app, and finished scoring the first real episode on
-the live Gist. The Week 2 redraft is underway — at least one full round has actually been drafted
-as of this update — this is steady-state support on a live season (small scoring-rule tweaks and
-UI polish as Jay actually uses the app), not a build phase.
+**THE REAL SEASON IS LIVE. Twist has been revealed. Episode 3 has been scored for real.** Jay ran
+the real preseason draft, everyone's in the app, and has scored 3 real episodes on the live Gist.
+This is steady-state support on a live season (small scoring-rule tweaks and UI polish as Jay
+actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `ade654c` (2026-08-11) — "Winter Circle" renamed to
-"Winners Circle" (display text only), see below — on top of `35ffd5e` (same day, final challenge
+**Git status: committed, not yet pushed.** Commit `50d941a` (2026-08-13) — fixes the Safe Pick
+lock screen (which used to render blank with zero explanation once the commissioner started
+scoring — the actual bug behind a Week 3 mix-up), adds a commissioner-only "This Week's Safe
+Picks" overview panel, and adds mandatory boy+girl dual Safe Picks starting Week 4 with a
+Boy/Girl/Both day-type toggle (the unscored gender's pick goes back in reserve rather than being
+used up) — see the dedicated section below for full detail. Verified via a from-scratch
+mocked-Gist Playwright harness (25/25 checks), not yet exercised on Jay's real Gist. On top of
+`ade654c` (2026-08-11) — "Winter Circle" renamed to "Winners Circle" (display text only), see
+below — on top of `35ffd5e` (same day, final challenge
 placements now support team ties, see below) — on top of `88dcc02` (2026-08-09) — Commissioner
 "Sync Remaining Draft Order" button, see below — on top of `6a4886f` (same day, standings tiebreak
 redesigned) and
@@ -28,6 +34,39 @@ retry, multi-episode reopen, iPad orientation unlock), `5fa98d1`/`a928615`/`509a
 updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-twist reveal
 toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below). No
 local uncommitted changes, no untracked files, all on `origin/main`.
+
+## Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks — 2026-08-13 (`50d941a`)
+
+Jay reported Week 3 scoring was clunky: a manager tried to resubmit his already-locked Week 3
+Safe Pick while Jay was mid-scoring and got a blank, unexplained screen — leading to a flood of
+confused texts. Root cause: `nextEpisodeNumber(state)` advances the instant the commissioner
+clicks *Start Episode*, not once it's finalized, so the app silently started treating the next
+week as "open" everywhere (player Safe Pick screen, commissioner reminders) the moment scoring
+began, with zero messaging about it.
+
+**Fixed:**
+- Player's Safe Pick screen now plainly states *"Episode N is being scored — Safe Picks are
+  locked"* and shows exactly what was picked, instead of rendering blank.
+- New commissioner-only **"This Week's Safe Picks"** panel (in the Commissioner section, under
+  Reminders) — every manager's pick(s) visible at a glance.
+- Commissioner Reminders panel now correctly shows nothing missing while an episode is mid-scoring
+  instead of nagging about the wrong week.
+
+**New feature, starting fresh at Week 4** (Weeks 1-3 keep the original single-pick format
+untouched): every manager now submits a mandatory **boy AND girl** Safe Pick each week. When
+starting to score an episode, the commissioner picks a **Safe Pick Day Type — Boy Day / Girl Day
+/ Both (Double Elimination)** — required before Finalize is allowed. Only the pick(s) matching
+that day type score; the other gender's pick is **not used up** — it goes back in reserve and can
+be picked again in a future week. "Both" covers the double-elimination curveball case, scoring
+both picks independently that week.
+
+Verified with a from-scratch mocked-Gist Playwright harness (25/25 checks, zero real GitHub API
+calls) — gender-filtered dropdowns, the locked screen (legacy and dual), Finalize gating, the
+reserve mechanic confirmed *across weeks* (a Girl Day's boy pick came back available the following
+week), and a full "Both" day scenario with one pick eliminated, scoring correctly on the
+leaderboard. Testing itself caught one real bug pre-ship: the new overview panel wasn't wired into
+the "unlock commissioner panel" render path and would've stayed blank until the next refresh —
+fixed. **Not yet exercised against Jay's real Gist** — this is the standing next-check item.
 
 ## "Winter Circle" renamed to "Winners Circle" + final-challenge elimination filtering confirmed — 2026-08-11 (`ade654c`)
 
