@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-13 (Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks + prior-week recap — confirmed live)
+# Project Status — updated 2026-08-13 (Safe Pick now locked until the next week's redraft opens — pushed, not yet confirmed live)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -9,7 +9,10 @@ the real preseason draft, everyone's in the app, and has scored 3 real episodes 
 This is steady-state support on a live season (small scoring-rule tweaks and UI polish as Jay
 actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `7274200` (2026-08-13) — adds a plain-text recap of the
+**Git status: clean and pushed.** Commit `0482744` (2026-08-13) — Safe Pick now stays locked on the
+prior week's result until the commissioner actually opens the next week's redraft, instead of
+unlocking the instant the prior episode finalizes — see the dedicated section below for full
+detail. On top of `fdc70e4` (PROJECT_STATUS.md update) and `7274200` (2026-08-13) — adds a plain-text recap of the
 prior week's Safe Pick result (hit/miss/reserved) above the pick form whenever a new week opens,
 closing a gap Jay found the same day he tried the boy/girl feature live — on top of `78f3b80`
 (PROJECT_STATUS.md update) and `50d941a` (2026-08-13) — fixes the Safe Pick lock screen (which
@@ -83,6 +86,41 @@ hit ("survived, +10 points"), miss ("eliminated, +0 points"), or reserved (dual 
 that didn't apply that day type — "reserved that week, still available"). Harness extended to
 27/27 checks. Not yet exercised: the Boy/Girl/Both day-type toggle and Finalize gating themselves
 on Jay's real Gist — that'll happen naturally once he scores Episode 4.
+
+## Safe Pick now locks until the next week's redraft actually opens — 2026-08-13 (`0482744`)
+
+Jay caught a second gap on the exact same live scenario as the prior-week-recap fix above (Episode
+3 scored, Week 4 redraft not yet started): Safe Pick had already unlocked and was accepting Week 4
+picks, even though he hadn't opened the Week 4 redraft yet. His rule, stated generally: Safe Pick
+for a week should stay locked — showing the prior week's result — until the commissioner actually
+opens that week's redraft. Unlocking should happen the moment the redraft *opens*, not once it's
+complete.
+
+**Root cause:** the Safe Pick screen opened the next week the instant `getCurrentEpisode` returned
+null (i.e. the moment the prior episode finalized), with no check at all for whether that week's
+redraft had actually started. The prior-week recap (above) made the transition friendlier to look
+at, but the open pick form still rendered immediately underneath it.
+
+**Fix:** added a third phase to Safe Pick's state machine. `safePickPhase(state)` in
+`js/views/commissioner.js` (new, exported — `currentOpenSafePickWeek` is now a thin wrapper over
+it) returns `'scoring'` (episode being entered — unchanged), the new `'waiting'` (episode
+finalized, but that week's redraft — `state.drafts.weekly[week]` — hasn't been started yet, and
+rosters aren't frozen), or `'open'` (redraft has started, or rosters are frozen so there's nothing
+to wait on). Wired into the player's Safe Pick screen (new `renderWaitingForRedraftSafePick` in
+`player.js` — same locked look as the mid-scoring lock screen, showing the last finalized week's
+recap instead of an open pick form), the commissioner's Safe Picks Overview panel (status note no
+longer falsely claims the next week is open), and defensively inside the submit/clear mutations in
+`app.js` (rejects if `safePickPhase` isn't `'open'`, mirroring the turn-enforcement pattern already
+used for drafts).
+
+Verified with a small Node script exercising `safePickPhase` directly against four scenarios
+(episode finalized + no next-week draft → locked/waiting; commissioner starts the redraft → opens;
+episode being scored → locked/scoring; rosters frozen with no draft object → opens anyway, since
+there's no redraft left to wait on) — all matched intended behavior before committing.
+
+**Pushed to `origin/main` — not yet confirmed live on Jay's real Gist.** Next thing to check when
+this resumes: have Jay open the real Week 4 redraft and confirm Safe Pick unlocks at that moment,
+not before.
 
 ## "Winter Circle" renamed to "Winners Circle" + final-challenge elimination filtering confirmed — 2026-08-11 (`ade654c`)
 
