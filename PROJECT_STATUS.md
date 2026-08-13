@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-13 (Safe Pick now locked until the next week's redraft opens — pushed, not yet confirmed live)
+# Project Status — updated 2026-08-13 (Safe Pick lock-timing fix confirmed live; commissioner Safe Picks panel now shows every week + inline editing)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -9,10 +9,15 @@ the real preseason draft, everyone's in the app, and has scored 3 real episodes 
 This is steady-state support on a live season (small scoring-rule tweaks and UI polish as Jay
 actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `0482744` (2026-08-13) — Safe Pick now stays locked on the
-prior week's result until the commissioner actually opens the next week's redraft, instead of
-unlocking the instant the prior episode finalizes — see the dedicated section below for full
-detail. On top of `fdc70e4` (PROJECT_STATUS.md update) and `7274200` (2026-08-13) — adds a plain-text recap of the
+**Git status: clean and pushed.** Commit `0ca9040` (2026-08-13) — the commissioner's Safe Picks
+panel now shows every week (collapsible accordion, current week open) instead of just the current
+one, and every manager's pick is directly editable inline (including dual boy/girl weeks) — see the
+dedicated section below. On top of `3a73b45` (PROJECT_STATUS.md update) and `0482744` (2026-08-13)
+— Safe Pick now stays locked on the prior week's result until the commissioner actually opens the
+next week's redraft, instead of unlocking the instant the prior episode finalizes — **confirmed
+live by Jay the same day**, exact intended message shown ("Week 4 Safe Picks aren't open yet...")
+with the Week 3 recap underneath — see the dedicated section below for full detail. On top of
+`fdc70e4` (PROJECT_STATUS.md update) and `7274200` (2026-08-13) — adds a plain-text recap of the
 prior week's Safe Pick result (hit/miss/reserved) above the pick form whenever a new week opens,
 closing a gap Jay found the same day he tried the boy/girl feature live — on top of `78f3b80`
 (PROJECT_STATUS.md update) and `50d941a` (2026-08-13) — fixes the Safe Pick lock screen (which
@@ -118,9 +123,38 @@ Verified with a small Node script exercising `safePickPhase` directly against fo
 episode being scored → locked/scoring; rosters frozen with no draft object → opens anyway, since
 there's no redraft left to wait on) — all matched intended behavior before committing.
 
+**Confirmed live by Jay the same day** — tested on the real deployed app and saw the exact intended
+behavior: "Week 4 Safe Picks aren't open yet — they'll unlock once the commissioner starts the Week
+4 redraft," with the Week 3 result recap shown underneath.
+
+## Safe Picks by Week: full history + inline editing for the commissioner — 2026-08-13 (`0ca9040`)
+
+Right after confirming the lock-timing fix above, Jay asked for two more things on the Commissioner
+panel: see every week's Safe Picks, not just the current one, and be able to edit a manager's pick
+directly (fixing a mistake, filling one in for someone who couldn't get to the app, etc.).
+
+**Rebuilt as a per-week accordion.** New `allSafePickWeeks(state)` in `js/views/commissioner.js`
+returns every week 1 through the current one (reusing `safePickPhase`), each rendered as a
+`<details class="sp-week-details">` — current week open by default, past weeks collapsed, same
+"look it up when you want it" accordion convention already used elsewhere in the app. Each section
+lists every active manager with editable, pre-filled `<select>`s — gender-filtered for Week 4+ dual
+weeks, with the existing scoring/reserved day-type tag shown next to each — plus one Save button
+per row.
+
+**New `onEditSafePick({ week, managerId, updates })` mutation in `app.js`** applies both the boy
+and girl edit in a single fetch-merge-write cycle per Save click, not two separate round-trips.
+Selecting "— no pick —" clears that pick entirely. Deliberately no validation against
+elimination/already-used rules here — this is an admin override tool, not the player's own
+submission flow. Panel title changed from "This Week's Safe Picks" to "Safe Picks by Week."
+
+Verified with a mocked-Gist Playwright harness (2 scenarios, zero real API calls, zero console
+errors): a 3-week legacy history (correct order, correct default-open week, editing and clearing
+both landed correctly) and a Week 4 dual boy/girl scenario with a Boy Day set (gender-correct
+dropdown options, correct scoring/reserved tags, editing just the girl pick left the boy pick
+untouched in the same mutation).
+
 **Pushed to `origin/main` — not yet confirmed live on Jay's real Gist.** Next thing to check when
-this resumes: have Jay open the real Week 4 redraft and confirm Safe Pick unlocks at that moment,
-not before.
+this resumes: have Jay expand a past week and edit a pick live, confirm it saves correctly.
 
 ## "Winter Circle" renamed to "Winners Circle" + final-challenge elimination filtering confirmed — 2026-08-11 (`ade654c`)
 
