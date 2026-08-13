@@ -361,6 +361,47 @@ function renderLockedSafePick(container, state, currentManagerId, episode) {
   `;
 }
 
+/** As soon as an episode finalizes, Safe Pick jumps straight to asking for the next week's pick
+ *  with zero acknowledgment of what happened to the last one — the same "silently move on with no
+ *  feedback" gap as the lock screen, one step later in the flow. This shows a plain-text recap of
+ *  the just-finalized prior week's pick(s): hit (+10), miss (eliminated, +0), or reserved (dual
+ *  weeks, the gender that didn't apply that day type — still available for a future week). Empty
+ *  string before Week 1 (no prior week exists yet). */
+function renderPriorWeekRecap(state, currentManagerId, week) {
+  const priorWeek = week - 1;
+  const episode = state.episodes.find((e) => e.episodeNumber === priorWeek);
+  if (!episode) return '';
+
+  const picks = (state.safePicks?.[String(priorWeek)] ?? []).filter((p) => p.managerId === currentManagerId);
+  const eliminatedIds = new Set((episode.eliminations ?? []).map((e) => e.castId));
+  const resultFor = (pick) => {
+    if (!pick) return 'no pick submitted';
+    const name = castName(state, pick.castId);
+    if (isDualSafePickWeek(priorWeek)) {
+      const dayType = episode.safePickDayType ?? 'both';
+      if (!safePickGenderIncluded(dayType, castGender(state, pick.castId))) {
+        return `${name} &mdash; reserved that week (not scored, still available)`;
+      }
+    }
+    return eliminatedIds.has(pick.castId)
+      ? `${name} &mdash; eliminated, +0 points`
+      : `${name} &mdash; survived, +${SAFE_PICK_POINTS} points`;
+  };
+
+  if (!isDualSafePickWeek(priorWeek)) {
+    return `<p class="note"><strong>Week ${priorWeek} result:</strong> ${resultFor(picks[0])}</p>`;
+  }
+  const boyPick = picks.find((p) => castGender(state, p.castId) === 'M');
+  const girlPick = picks.find((p) => castGender(state, p.castId) === 'F');
+  return `
+    <p class="note"><strong>Week ${priorWeek} results:</strong></p>
+    <ul>
+      <li>Boy &mdash; ${resultFor(boyPick)}</li>
+      <li>Girl &mdash; ${resultFor(girlPick)}</li>
+    </ul>
+  `;
+}
+
 /** Weeks 1-3: one mandatory-optional pick. Week 4+: a boy AND a girl pick, both mandatory —
  *  submitted together via a single Submit. Whichever gender doesn't end up mattering that
  *  episode goes back in reserve (see scoring.js) rather than being consumed. */
@@ -409,8 +450,11 @@ function renderOpenSafePick(container, state, currentManagerId, week, { onSubmit
     })
     .join('');
 
+  const priorWeekRecapHtml = renderPriorWeekRecap(state, currentManagerId, week);
+
   if (!dual) {
     container.innerHTML = `
+      ${priorWeekRecapHtml}
       <p>Pick who you think survives Week ${week}'s episode from the dropdown below, then hit Submit &mdash;
       +${SAFE_PICK_POINTS} points if they do. Each cast member can only be used once all season, and this locks
       the moment the commissioner starts entering Week ${week}'s results.</p>
@@ -429,6 +473,7 @@ function renderOpenSafePick(container, state, currentManagerId, week, { onSubmit
   }
 
   container.innerHTML = `
+    ${priorWeekRecapHtml}
     <p>Pick who you think survives Week ${week}'s episode &mdash; one boy, one girl, both required.
     Once the episode airs, the commissioner will mark it a Boy Day, Girl Day, or Double Elimination;
     whichever pick doesn't apply goes back in reserve so you can use that cast member again another
