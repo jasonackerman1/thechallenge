@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-13 (Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks with a Boy/Girl/Both day-type toggle)
+# Project Status — updated 2026-08-13 (Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks + prior-week recap — confirmed live)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -9,14 +9,19 @@ the real preseason draft, everyone's in the app, and has scored 3 real episodes 
 This is steady-state support on a live season (small scoring-rule tweaks and UI polish as Jay
 actually uses the app), not a build phase.
 
-**Git status: committed, not yet pushed.** Commit `50d941a` (2026-08-13) — fixes the Safe Pick
-lock screen (which used to render blank with zero explanation once the commissioner started
-scoring — the actual bug behind a Week 3 mix-up), adds a commissioner-only "This Week's Safe
-Picks" overview panel, and adds mandatory boy+girl dual Safe Picks starting Week 4 with a
-Boy/Girl/Both day-type toggle (the unscored gender's pick goes back in reserve rather than being
-used up) — see the dedicated section below for full detail. Verified via a from-scratch
-mocked-Gist Playwright harness (25/25 checks), not yet exercised on Jay's real Gist. On top of
-`ade654c` (2026-08-11) — "Winter Circle" renamed to "Winners Circle" (display text only), see
+**Git status: clean and pushed.** Commit `7274200` (2026-08-13) — adds a plain-text recap of the
+prior week's Safe Pick result (hit/miss/reserved) above the pick form whenever a new week opens,
+closing a gap Jay found the same day he tried the boy/girl feature live — on top of `78f3b80`
+(PROJECT_STATUS.md update) and `50d941a` (2026-08-13) — fixes the Safe Pick lock screen (which
+used to render blank with zero explanation once the commissioner started scoring — the actual bug
+behind a Week 3 mix-up), adds a commissioner-only "This Week's Safe Picks" overview panel, and
+adds mandatory boy+girl dual Safe Picks starting Week 4 with a Boy/Girl/Both day-type toggle (the
+unscored gender's pick goes back in reserve rather than being used up) — see the dedicated section
+below for full detail. **Confirmed live on Jay's real Gist same day** — he opened the app right
+after this shipped (Episode 3 scored, Week 4 redraft not yet started) and the dual boy/girl picker
+rendered correctly; his own feedback on what was missing (the recap) is what led to the second
+commit. On top of `ade654c` (2026-08-11) — "Winter Circle" renamed to "Winners Circle" (display
+text only), see
 below — on top of `35ffd5e` (same day, final challenge
 placements now support team ties, see below) — on top of `88dcc02` (2026-08-09) — Commissioner
 "Sync Remaining Draft Order" button, see below — on top of `6a4886f` (same day, standings tiebreak
@@ -66,7 +71,18 @@ reserve mechanic confirmed *across weeks* (a Girl Day's boy pick came back avail
 week), and a full "Both" day scenario with one pick eliminated, scoring correctly on the
 leaderboard. Testing itself caught one real bug pre-ship: the new overview panel wasn't wired into
 the "unlock commissioner panel" render path and would've stayed blank until the next refresh —
-fixed. **Not yet exercised against Jay's real Gist** — this is the standing next-check item.
+fixed.
+
+**Confirmed live on Jay's real Gist the same day** — Episode 3 was already scored, Week 4 redraft
+not yet started; the dual boy/girl picker rendered correctly with the two dropdowns.
+
+**Follow-up gap Jay found immediately, fixed same session (`7274200`):** the moment an episode
+finalizes, Safe Pick jumped straight to the next week's pick form with zero acknowledgment of the
+prior week's result. Added a plain-text recap above the pick form every time a new week opens —
+hit ("survived, +10 points"), miss ("eliminated, +0 points"), or reserved (dual weeks, the gender
+that didn't apply that day type — "reserved that week, still available"). Harness extended to
+27/27 checks. Not yet exercised: the Boy/Girl/Both day-type toggle and Finalize gating themselves
+on Jay's real Gist — that'll happen naturally once he scores Episode 4.
 
 ## "Winter Circle" renamed to "Winners Circle" + final-challenge elimination filtering confirmed — 2026-08-11 (`ade654c`)
 
