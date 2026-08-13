@@ -461,6 +461,30 @@
     }
     .control-row > button { margin-top: 0; }
 
+    /* Per-week accordion inside the Commissioner's Safe Picks panel — lighter-touch than the
+       big top-level .section accordions (function-first admin tooling, not a primary-flow view). */
+    details.sp-week-details {
+      margin: 10px 0;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+    details.sp-week-details > summary {
+      cursor: pointer;
+      font-weight: 600;
+      padding: 4px 0;
+    }
+    details.sp-week-details .control-row {
+      align-items: flex-start;
+      padding: 6px 0;
+    }
+    details.sp-week-details .control-row > label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
     @media (min-width: 640px) {
       body { max-width: 640px; padding: 24px; font-size: 17px; }
       .site-logo { max-width: 240px; }
@@ -556,7 +580,7 @@
       </div>
 
       <div class="commish-block">
-        <h3>This Week's Safe Picks</h3>
+        <h3>Safe Picks by Week</h3>
         <div id="safe-picks-overview-container"></div>
       </div>
 

@@ -96,8 +96,38 @@ function render(state) {
     renderRedraft();
     renderFinalChallenge();
     renderReminders(els.remindersContainer, state);
-    renderSafePicksOverview(els.safePicksOverviewContainer, state);
+    renderSafePicksAdmin();
   }
+}
+
+/** The commissioner's Safe Picks panel is both a display and an editor — every week gets its own
+ *  collapsible section, and every manager's pick can be corrected or filled in directly (a
+ *  managers forgot to submit, a wrong cast member was picked, etc.). Wrapped in its own function
+ *  (same pattern as renderRedraft/renderEpisode/etc.) since it's called from two places: the
+ *  normal render loop and right after the commissioner unlocks. */
+function renderSafePicksAdmin() {
+  renderSafePicksOverview(els.safePicksOverviewContainer, currentState, {
+    onEditSafePick: ({ week, managerId, updates }) =>
+      runMutation((fresh) => {
+        const weekKey = String(week);
+        const weekPicks = (fresh.safePicks[weekKey] ??= []);
+        for (const { gender, castId } of updates) {
+          const existingIndex = weekPicks.findIndex(
+            (p) => p.managerId === managerId && (!gender || castGender(fresh, p.castId) === gender)
+          );
+          if (castId) {
+            if (existingIndex >= 0) {
+              weekPicks[existingIndex] = { ...weekPicks[existingIndex], castId, submittedAt: new Date().toISOString() };
+            } else {
+              weekPicks.push({ managerId, castId, submittedAt: new Date().toISOString() });
+            }
+          } else if (existingIndex >= 0) {
+            weekPicks.splice(existingIndex, 1);
+          }
+        }
+        return fresh;
+      }),
+  });
 }
 
 function openIdentityModal() {
@@ -581,7 +611,7 @@ function boot() {
       renderRedraft();
       renderFinalChallenge();
       renderReminders(els.remindersContainer, currentState);
-      renderSafePicksOverview(els.safePicksOverviewContainer, currentState);
+      renderSafePicksAdmin();
     } else {
       setStatus('Wrong commissioner password.', true);
     }

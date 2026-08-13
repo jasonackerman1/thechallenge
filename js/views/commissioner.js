@@ -12,7 +12,7 @@ import {
   isDualSafePickWeek,
   castGender,
 } from '../scoring.js';
-import { managerName, castName } from './shared.js';
+import { managerName, castName, castNameWithGender } from './shared.js';
 
 /** Shared snake-draft pick UI — used for both the preseason draft and every weekly redraft.
  *  `idPrefix` keeps element ids distinct when both sections render on the same page. */
@@ -635,53 +635,113 @@ function joinNames(names) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
-/** Everyone's Safe Pick for the week that actually matters right now — the one being scored if
- *  the commissioner is mid-episode, otherwise the currently open week. Lets Jay see every pick at
- *  a glance instead of asking around or hunting through each manager's own screen (the gap that
- *  caused the Week 3 confusion). From Week 4 on, shows each manager's boy AND girl pick, and once
- *  a day type is chosen, marks which one is actually being scored vs. put back in reserve. */
-export function renderSafePicksOverview(container, state) {
-  const { phase, week: openWeek, episode } = safePickPhase(state);
-  // While waiting on the commissioner to open the next redraft, the week that "matters right
-  // now" is the one just finalized (still locked, nobody can touch it) — not the not-yet-open
-  // next week, which has nothing to show anyway.
-  const week = phase === 'waiting' ? openWeek - 1 : openWeek;
-  const dual = isDualSafePickWeek(week);
-  const dayType = episode?.safePickDayType ?? null;
-  const weekPicks = state.safePicks?.[String(week)] ?? [];
+/** Every week Safe Pick has ever mattered so far, 1 through whichever week is "current" right
+ *  now — the currently-open/locked week, or the just-finalized week while waiting on the next
+ *  redraft to open. The commissioner should be able to review and correct any of them, not just
+ *  the current one (a manager forgot to submit, someone picked the wrong cast member, etc.). */
+function allSafePickWeeks(state) {
+  const { phase, week } = safePickPhase(state);
+  const lastWeek = phase === 'waiting' ? week - 1 : week;
+  return Array.from({ length: Math.max(lastWeek, 0) }, (_, i) => i + 1);
+}
+
+/** Everyone's Safe Pick, every week, editable inline. Originally showed only "the week that
+ *  matters right now" read-only — Jay asked for the full history (to see how a whole season of
+ *  picks played out, not just the live one) plus the ability to actually correct a manager's pick
+ *  directly, rather than needing them to fix it themselves from their own device. Each week is a
+ *  collapsible section (closed by default, current week open) so a season's worth of weeks
+ *  doesn't turn into a wall of dropdowns; from Week 4 on, shows each manager's boy AND girl pick,
+ *  and once a day type is chosen, tags which one actually scored vs. went back in reserve. */
+export function renderSafePicksOverview(container, state, { onEditSafePick } = {}) {
+  const { phase, week: openWeek } = safePickPhase(state);
+  const currentWeek = phase === 'waiting' ? openWeek - 1 : openWeek;
+  const weeks = allSafePickWeeks(state);
   const activeManagers = state.managers.filter((m) => m.active);
 
-  const pickLabel = (pick, gender) => {
-    if (!pick) return '<span style="color:var(--text-muted, #9a9590);">&mdash; not submitted &mdash;</span>';
-    const name = castName(state, pick.castId);
-    if (!dual || !dayType) return name;
-    const included = dayType === 'both' || (dayType === 'boy' && gender === 'M') || (dayType === 'girl' && gender === 'F');
-    return included ? `${name} &mdash; scoring` : `${name} &mdash; reserved (not this week)`;
+  const overallNote =
+    phase === 'scoring'
+      ? `Episode ${openWeek} is being scored &mdash; that week's picks are locked below.`
+      : phase === 'waiting'
+      ? `Week ${currentWeek} is scored and locked. Week ${openWeek} isn't open yet &mdash; waiting for the commissioner to start the Week ${openWeek} redraft.`
+      : `Week ${openWeek} is currently open for picking.`;
+
+  const optionsFor = (gender, selectedCastId) =>
+    `<option value="">&mdash; no pick &mdash;</option>` +
+    state.cast
+      .filter((c) => (gender ? c.gender === gender : true))
+      .map((c) => `<option value="${c.id}" ${selectedCastId === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
+      .join('');
+
+  const weekSectionHtml = (week) => {
+    const episode = state.episodes.find((e) => e.episodeNumber === week);
+    const dual = isDualSafePickWeek(week);
+    const dayType = episode?.safePickDayType ?? null;
+    const weekPicks = state.safePicks?.[String(week)] ?? [];
+
+    const dayTag = (gender) => {
+      if (!dual || !dayType) return '';
+      const included = dayType === 'both' || (dayType === 'boy' && gender === 'M') || (dayType === 'girl' && gender === 'F');
+      return included
+        ? ` <span style="color:#1baf7a;">scoring</span>`
+        : ` <span style="color:var(--text-muted, #9a9590);">reserved</span>`;
+    };
+
+    const rows = activeManagers
+      .map((m) => {
+        const picks = weekPicks.filter((p) => p.managerId === m.id);
+        const selectsHtml = dual
+          ? `
+            <label>Boy${dayTag('M')}<select class="sp-edit-select" data-gender="M">${optionsFor(
+              'M',
+              picks.find((p) => castGender(state, p.castId) === 'M')?.castId
+            )}</select></label>
+            <label>Girl${dayTag('F')}<select class="sp-edit-select" data-gender="F">${optionsFor(
+              'F',
+              picks.find((p) => castGender(state, p.castId) === 'F')?.castId
+            )}</select></label>`
+          : `<label>Pick<select class="sp-edit-select" data-gender="">${optionsFor(null, picks[0]?.castId)}</select></label>`;
+
+        return `
+          <div class="control-row sp-edit-row" data-week="${week}" data-manager="${m.id}">
+            <strong>${m.name}</strong>
+            ${selectsHtml}
+            <button type="button" class="btn-inline sp-edit-save-btn">Save</button>
+          </div>
+        `;
+      })
+      .join('');
+
+    return rows;
   };
 
-  const rows = activeManagers
-    .map((m) => {
-      const picks = weekPicks.filter((p) => p.managerId === m.id);
-      if (!dual) {
-        return `<li><strong>${m.name}</strong>: ${pickLabel(picks[0], null)}</li>`;
-      }
-      const boyPick = picks.find((p) => castGender(state, p.castId) === 'M');
-      const girlPick = picks.find((p) => castGender(state, p.castId) === 'F');
-      return `<li><strong>${m.name}</strong> &mdash; Boy: ${pickLabel(boyPick, 'M')} &nbsp;|&nbsp; Girl: ${pickLabel(girlPick, 'F')}</li>`;
-    })
+  const sections = [...weeks]
+    .reverse()
+    .map(
+      (week) => `
+        <details class="sp-week-details" ${week === currentWeek ? 'open' : ''}>
+          <summary>Week ${week}</summary>
+          ${weekSectionHtml(week)}
+        </details>
+      `
+    )
     .join('');
 
-  const statusNote =
-    phase === 'scoring'
-      ? `Episode ${week} is being scored &mdash; these picks are locked.`
-      : phase === 'waiting'
-      ? `Week ${week} is scored and locked. Week ${openWeek} isn't open yet &mdash; waiting for the commissioner to start the Week ${openWeek} redraft.`
-      : `Week ${week} is currently open for picking.`;
-
   container.innerHTML = `
-    <p class="note">${statusNote}</p>
-    <ul>${rows}</ul>
+    <p class="note">${overallNote}</p>
+    ${sections || '<p class="note">No weeks yet.</p>'}
   `;
+
+  container.querySelectorAll('.sp-edit-row').forEach((row) => {
+    row.querySelector('.sp-edit-save-btn').addEventListener('click', () => {
+      const week = Number(row.dataset.week);
+      const managerId = row.dataset.manager;
+      const updates = Array.from(row.querySelectorAll('.sp-edit-select')).map((select) => ({
+        gender: select.dataset.gender || null,
+        castId: select.value || null,
+      }));
+      onEditSafePick({ week, managerId, updates });
+    });
+  });
 }
 
 /** Active managers who haven't submitted a Safe Pick for the currently-open week yet — null week
