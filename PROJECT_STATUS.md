@@ -1,4 +1,4 @@
-# Project Status — updated 2026-08-13 (Safe Pick lock-timing fix confirmed live; commissioner Safe Picks panel now shows every week + inline editing)
+# Project Status — updated 2026-08-13 (everything below confirmed deployed live via direct byte-grep of jasonackerman1.github.io)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
@@ -9,7 +9,12 @@ the real preseason draft, everyone's in the app, and has scored 3 real episodes 
 This is steady-state support on a live season (small scoring-rule tweaks and UI polish as Jay
 actually uses the app), not a build phase.
 
-**Git status: clean and pushed.** Commit `0ca9040` (2026-08-13) — the commissioner's Safe Picks
+**Git status: clean and pushed, all confirmed deployed.** Latest commit `2d70824` (docs only);
+latest code commit `0ca9040` confirmed live both via the GitHub Pages Builds API (`status: "built"`
+for that exact commit) and directly `curl`ing `jasonackerman1.github.io` and grepping the served JS
+files for the new code (`allSafePickWeeks`, `sp-week-details`, `renderSafePicksAdmin`,
+`safePickPhase`, `renderWaitingForRedraftSafePick`) — all present byte-for-byte on the live domain,
+not just in the local repo. Commit `0ca9040` (2026-08-13) — the commissioner's Safe Picks
 panel now shows every week (collapsible accordion, current week open) instead of just the current
 one, and every manager's pick is directly editable inline (including dual boy/girl weeks) — see the
 dedicated section below. On top of `3a73b45` (PROJECT_STATUS.md update) and `0482744` (2026-08-13)
@@ -153,8 +158,11 @@ both landed correctly) and a Week 4 dual boy/girl scenario with a Boy Day set (g
 dropdown options, correct scoring/reserved tags, editing just the girl pick left the boy pick
 untouched in the same mutation).
 
-**Pushed to `origin/main` — not yet confirmed live on Jay's real Gist.** Next thing to check when
-this resumes: have Jay expand a past week and edit a pick live, confirm it saves correctly.
+**Pushed to `origin/main` and confirmed deployed** (GitHub Pages build `status: "built"` for this
+commit, plus a direct `curl`+grep of the live domain's served JS confirming the new code is
+actually there). **Not yet exercised by Jay against his real Gist data** — deployed and exercisable
+is confirmed; him actually using the edit feature for real is not. Next thing to check when this
+resumes: have Jay expand a past week and edit a pick live, confirm it saves correctly.
 
 ## "Winter Circle" renamed to "Winners Circle" + final-challenge elimination filtering confirmed — 2026-08-11 (`ade654c`)
 
