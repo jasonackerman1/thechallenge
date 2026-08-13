@@ -19,6 +19,7 @@ import {
   rostersReadyForEpisode,
   getCurrentRedraftWeek,
   nextRedraftWeek,
+  safePickPhase,
 } from './views/commissioner.js';
 import {
   renderIdentityModal,
@@ -184,7 +185,9 @@ function renderPlayerView() {
     onSubmitSafePick: (payload) =>
       runMutation((fresh) => {
         const managerId = loadPlayerIdentity();
-        const week = nextEpisodeNumber(fresh);
+        const phase = safePickPhase(fresh);
+        if (phase.phase !== 'open') throw new Error('Safe Picks are not open right now. Refresh and try again.');
+        const week = phase.week;
         const usedCastIds = getUsedSafePicks(fresh, managerId);
         const eliminatedCastIds = new Set(computeEliminationEpisodes(fresh.episodes).keys());
         const weekKey = String(week);
@@ -223,7 +226,9 @@ function renderPlayerView() {
     onClearSafePick: (gender) =>
       runMutation((fresh) => {
         const managerId = loadPlayerIdentity();
-        const week = nextEpisodeNumber(fresh);
+        const phase = safePickPhase(fresh);
+        if (phase.phase !== 'open') throw new Error('Safe Picks are not open right now. Refresh and try again.');
+        const week = phase.week;
         const weekKey = String(week);
         if (fresh.safePicks[weekKey]) {
           fresh.safePicks[weekKey] = fresh.safePicks[weekKey].filter(

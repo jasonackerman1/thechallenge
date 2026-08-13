@@ -16,7 +16,7 @@ import {
   SCORING_EVENT_LABELS,
 } from '../scoring.js';
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete, TARGET_ROSTER_SIZE } from '../draft.js';
-import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber, getCurrentEpisode, rostersReadyForEpisode } from './commissioner.js';
+import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber, getCurrentEpisode, rostersReadyForEpisode, safePickPhase } from './commissioner.js';
 import { managerName, castName, castNameWithGender, castCardHtml } from './shared.js';
 import { CAST_BIOS } from '../bios.js';
 
@@ -402,6 +402,19 @@ function renderPriorWeekRecap(state, currentManagerId, week) {
   `;
 }
 
+/** Between a finalized episode and the commissioner actually opening the next week's redraft,
+ *  Safe Pick has nothing new to offer yet — rosters for that week aren't even being set. Rather
+ *  than a wide-open pick screen (the exact Week 4 gap Jay flagged), this stays locked on the last
+ *  finalized week's result, same content as the recap banner shown once picking is actually open,
+ *  just without an open-pick form underneath it. */
+function renderWaitingForRedraftSafePick(container, state, currentManagerId, week) {
+  const recapHtml = renderPriorWeekRecap(state, currentManagerId, week);
+  container.innerHTML = `
+    <p><strong>Week ${week} Safe Picks aren't open yet.</strong> They'll unlock once the commissioner starts the Week ${week} redraft.</p>
+    ${recapHtml}
+  `;
+}
+
 /** Weeks 1-3: one mandatory-optional pick. Week 4+: a boy AND a girl pick, both mandatory —
  *  submitted together via a single Submit. Whichever gender doesn't end up mattering that
  *  episode goes back in reserve (see scoring.js) rather than being consumed. */
@@ -508,13 +521,16 @@ export function renderSafePick(container, state, currentManagerId, { onSubmitSaf
     return;
   }
 
-  const currentEpisode = getCurrentEpisode(state);
-  if (currentEpisode) {
-    renderLockedSafePick(container, state, currentManagerId, currentEpisode);
+  const { phase, week, episode } = safePickPhase(state);
+  if (phase === 'scoring') {
+    renderLockedSafePick(container, state, currentManagerId, episode);
+    return;
+  }
+  if (phase === 'waiting') {
+    renderWaitingForRedraftSafePick(container, state, currentManagerId, week);
     return;
   }
 
-  const week = nextEpisodeNumber(state);
   renderOpenSafePick(container, state, currentManagerId, week, { onSubmitSafePick, onClearSafePick });
 }
 

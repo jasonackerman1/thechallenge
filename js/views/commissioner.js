@@ -301,13 +301,40 @@ export function nextEpisodeNumber(state) {
   return last ? last.episodeNumber + 1 : 1;
 }
 
-/** The week Safe Picks are actually open for right now, or null if none is (an episode is
- *  currently being scored, so that week's picks are locked and the next week isn't open yet).
- *  `nextEpisodeNumber` alone isn't this — it advances the instant an episode *starts*, well
- *  before it's finalized, which is exactly what silently locked a manager's Safe Pick screen
- *  with no explanation. */
+/** Whether that week's roster-setting process has actually been kicked off by the commissioner:
+ *  the preseason draft for Week 1 (Safe Pick is hidden entirely during Preseason Mode until that
+ *  draft starts, so this is always true by the time Week 1 can be reached), that week's weekly
+ *  redraft for Week 2+, or unconditionally true once rosters are frozen (no more redrafts happen
+ *  at all, so nothing to wait on). Matches "unlocks once the redraft opens," not "once it's
+ *  complete" — managers can safe-pick while a redraft is still in progress. */
+function redraftStartedForWeek(state, week) {
+  if (week <= 1) return true;
+  if (state.meta.rosterFrozen) return true;
+  return !!state.drafts.weekly[String(week)];
+}
+
+/** The single source of truth for what Safe Pick should show right now, for both the player
+ *  screen and the commissioner's overview. Three phases:
+ *  - 'scoring': an episode is actively being entered — last week's picks are locked and shown.
+ *  - 'waiting': that episode just finalized, but the commissioner hasn't opened the next week's
+ *    redraft yet — Safe Pick stays locked on the *previous* week rather than wide open, since
+ *    rosters for the new week aren't even being set yet. This is the Week 4 gap Jay flagged:
+ *    `nextEpisodeNumber` alone used to open the next week's picks the instant the prior episode
+ *    finalized, with no regard for whether that week's redraft had actually started.
+ *  - 'open': pick away. */
+export function safePickPhase(state) {
+  const currentEpisode = getCurrentEpisode(state);
+  if (currentEpisode) return { phase: 'scoring', week: currentEpisode.episodeNumber, episode: currentEpisode };
+  const week = nextEpisodeNumber(state);
+  if (!redraftStartedForWeek(state, week)) return { phase: 'waiting', week };
+  return { phase: 'open', week };
+}
+
+/** The week Safe Picks are actually open for right now, or null if none is. Thin wrapper over
+ *  `safePickPhase` kept for callers that only care about the open/closed distinction. */
 export function currentOpenSafePickWeek(state) {
-  return getCurrentEpisode(state) ? null : nextEpisodeNumber(state);
+  const { phase, week } = safePickPhase(state);
+  return phase === 'open' ? week : null;
 }
 
 /** Episode N can't start until that week's roster is actually set: the preseason draft for
@@ -614,10 +641,13 @@ function joinNames(names) {
  *  caused the Week 3 confusion). From Week 4 on, shows each manager's boy AND girl pick, and once
  *  a day type is chosen, marks which one is actually being scored vs. put back in reserve. */
 export function renderSafePicksOverview(container, state) {
-  const currentEpisode = getCurrentEpisode(state);
-  const week = currentEpisode?.episodeNumber ?? nextEpisodeNumber(state);
+  const { phase, week: openWeek, episode } = safePickPhase(state);
+  // While waiting on the commissioner to open the next redraft, the week that "matters right
+  // now" is the one just finalized (still locked, nobody can touch it) — not the not-yet-open
+  // next week, which has nothing to show anyway.
+  const week = phase === 'waiting' ? openWeek - 1 : openWeek;
   const dual = isDualSafePickWeek(week);
-  const dayType = currentEpisode?.safePickDayType ?? null;
+  const dayType = episode?.safePickDayType ?? null;
   const weekPicks = state.safePicks?.[String(week)] ?? [];
   const activeManagers = state.managers.filter((m) => m.active);
 
@@ -641,9 +671,12 @@ export function renderSafePicksOverview(container, state) {
     })
     .join('');
 
-  const statusNote = currentEpisode
-    ? `Episode ${week} is being scored &mdash; these picks are locked.`
-    : `Week ${week} is currently open for picking.`;
+  const statusNote =
+    phase === 'scoring'
+      ? `Episode ${week} is being scored &mdash; these picks are locked.`
+      : phase === 'waiting'
+      ? `Week ${week} is scored and locked. Week ${openWeek} isn't open yet &mdash; waiting for the commissioner to start the Week ${openWeek} redraft.`
+      : `Week ${week} is currently open for picking.`;
 
   container.innerHTML = `
     <p class="note">${statusNote}</p>
@@ -652,9 +685,10 @@ export function renderSafePicksOverview(container, state) {
 }
 
 /** Active managers who haven't submitted a Safe Pick for the currently-open week yet — null week
- *  (nobody's missing) while an episode is being scored, matching what a manager actually sees on
- *  their own screen. From Week 4 on, both a boy AND a girl pick are required — "missing" means
- *  either one is still unsubmitted. */
+ *  (nobody's missing) while an episode is being scored, or while the next week's redraft hasn't
+ *  been opened yet, matching what a manager actually sees on their own screen either way. From
+ *  Week 4 on, both a boy AND a girl pick are required — "missing" means either one is still
+ *  unsubmitted. */
 function missingSafePicks(state) {
   const week = currentOpenSafePickWeek(state);
   if (week === null) return { week, missing: [] };
