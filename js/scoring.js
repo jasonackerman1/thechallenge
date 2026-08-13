@@ -39,6 +39,28 @@ export const SAFE_PICK_POINTS = 10;
 export const FINAL_CHALLENGE_POINTS = { third: 10, second: 25, winner: 50 };
 export const PRESEASON_BONUS_POINTS = { first: 30, second: 20, third: 10 };
 
+/** Weeks 1-3 used a single safe pick per manager. Starting Week 4, a boy AND girl pick are both
+ *  mandatory every week (Jay's fix for the "which gender is even at risk this week" confusion) —
+ *  the commissioner declares the week Boy/Girl/Both once the episode airs, which decides which
+ *  pick(s) actually get scored; the other gender's pick goes back in reserve, unused, so that
+ *  cast member stays available for a future week. */
+export const DUAL_SAFE_PICK_START_WEEK = 4;
+
+export function isDualSafePickWeek(week) {
+  return week >= DUAL_SAFE_PICK_START_WEEK;
+}
+
+export function castGender(state, castId) {
+  return state.cast.find((c) => c.id === castId)?.gender ?? null;
+}
+
+/** Whether a given pick's gender was actually scored under the episode's chosen day type.
+ *  Missing/unset dayType (shouldn't happen — the commissioner UI requires it before finalizing
+ *  a dual week) defaults to 'both' as the safe fallback, rather than silently dropping points. */
+export function safePickGenderIncluded(dayType, gender) {
+  return dayType === 'both' || (dayType === 'boy' && gender === 'M') || (dayType === 'girl' && gender === 'F');
+}
+
 /** Map<castId, episodeNumber> — the episode each cast member was eliminated in. */
 export function computeEliminationEpisodes(episodes) {
   const map = new Map();
@@ -99,23 +121,46 @@ export function computeRosterPointsForManagerWeek(state, managerId, week) {
   );
 }
 
-/** Safe-pick points a manager earned for a given week: +10 if their pick survived, else 0. */
+/** Safe-pick points a manager earned for a given week: +10 per pick that survived. Weeks before
+ *  DUAL_SAFE_PICK_START_WEEK have exactly one pick, always scored. From that week on, a manager
+ *  has up to two picks (one boy, one girl) but only the one(s) matching the episode's chosen day
+ *  type actually score — the other sits out, unscored, for that week. */
 export function computeSafePickPointsForManagerWeek(state, managerId, week) {
-  const weekPicks = state.safePicks?.[String(week)] ?? [];
-  const pick = weekPicks.find((p) => p.managerId === managerId);
-  if (!pick) return 0;
   const episode = state.episodes.find((e) => e.episodeNumber === week);
   if (!episode) return 0;
-  const eliminatedThisEpisode = (episode.eliminations ?? []).some((e) => e.castId === pick.castId);
-  return eliminatedThisEpisode ? 0 : SAFE_PICK_POINTS;
+  const weekPicks = (state.safePicks?.[String(week)] ?? []).filter((p) => p.managerId === managerId);
+  const eliminatedIds = new Set((episode.eliminations ?? []).map((e) => e.castId));
+  const dual = isDualSafePickWeek(week);
+  const dayType = episode.safePickDayType ?? 'both';
+  return weekPicks.reduce((points, pick) => {
+    if (dual && !safePickGenderIncluded(dayType, castGender(state, pick.castId))) return points;
+    return points + (eliminatedIds.has(pick.castId) ? 0 : SAFE_PICK_POINTS);
+  }, 0);
 }
 
-/** Every cast member a manager has already used as a safe pick, across all weeks so far. */
+/** Every cast member a manager has already used as a safe pick, across all weeks so far — i.e.
+ *  can't be picked again. A dual week's pick that wasn't included in that week's chosen day type
+ *  never counts as used: it goes back in reserve for a future week's pick instead. While a dual
+ *  week is still open/unfinalized, both of that week's picks count as provisionally used (same
+ *  as the single-pick weeks always have) since the day type isn't decided yet. */
 export function getUsedSafePicks(state, managerId) {
   const used = new Set();
-  for (const weekPicks of Object.values(state.safePicks ?? {})) {
-    const pick = weekPicks.find((p) => p.managerId === managerId);
-    if (pick) used.add(pick.castId);
+  for (const [weekStr, weekPicks] of Object.entries(state.safePicks ?? {})) {
+    const week = Number(weekStr);
+    const picks = weekPicks.filter((p) => p.managerId === managerId);
+    if (!isDualSafePickWeek(week)) {
+      picks.forEach((p) => used.add(p.castId));
+      continue;
+    }
+    const episode = state.episodes.find((e) => e.episodeNumber === week);
+    if (!episode?.finalized) {
+      picks.forEach((p) => used.add(p.castId));
+      continue;
+    }
+    const dayType = episode.safePickDayType ?? 'both';
+    for (const pick of picks) {
+      if (safePickGenderIncluded(dayType, castGender(state, pick.castId))) used.add(pick.castId);
+    }
   }
   return used;
 }

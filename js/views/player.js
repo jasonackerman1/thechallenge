@@ -8,6 +8,9 @@ import {
   computeCastSeasonPoints,
   computeCastPointsBreakdownByWeek,
   getUsedSafePicks,
+  isDualSafePickWeek,
+  castGender,
+  safePickGenderIncluded,
   SAFE_PICK_POINTS,
   PRESEASON_BONUS_POINTS,
   SCORING_EVENT_LABELS,
@@ -294,47 +297,101 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
 }
 
 /** Every cast member this manager has ever safe-picked, with the outcome once that week's
- *  episode is finalized (undecided if the pick is this week's still-open one). */
+ *  episode is finalized (undecided if the pick is this week's still-open one). From Week 4 on, a
+ *  pick that ended up on the "wrong" gender for that week's day type never got scored — it went
+ *  back in reserve instead — so it's deliberately left out of this map, same as if it had never
+ *  been picked at all, rather than showing a fake hit/miss for something that was never scored. */
 function mySafePickOutcomes(state, managerId) {
   const outcomes = new Map();
   for (const [weekStr, picks] of Object.entries(state.safePicks ?? {})) {
-    const pick = picks.find((p) => p.managerId === managerId);
-    if (!pick) continue;
     const week = Number(weekStr);
     const episode = state.episodes.find((e) => e.episodeNumber === week);
     const decided = !!episode?.finalized;
-    const eliminatedThisWeek = decided && (episode.eliminations ?? []).some((e) => e.castId === pick.castId);
-    outcomes.set(pick.castId, { week, decided, success: decided && !eliminatedThisWeek });
+    for (const pick of picks.filter((p) => p.managerId === managerId)) {
+      if (isDualSafePickWeek(week)) {
+        if (!decided) continue;
+        const dayType = episode.safePickDayType ?? 'both';
+        if (!safePickGenderIncluded(dayType, castGender(state, pick.castId))) continue;
+      }
+      const eliminatedThisWeek = decided && (episode.eliminations ?? []).some((e) => e.castId === pick.castId);
+      outcomes.set(pick.castId, { week, decided, success: decided && !eliminatedThisWeek });
+    }
   }
   return outcomes;
 }
 
-export function renderSafePick(container, state, currentManagerId, { onSubmitSafePick, onClearSafePick }) {
-  if (!currentManagerId) {
-    container.innerHTML = `<p>Pick your identity above to make a safe pick.</p>`;
+/** Once the commissioner starts scoring an episode, that week's Safe Picks are locked — this
+ *  used to render as a totally blank/confusing screen with zero explanation (the actual bug that
+ *  tripped someone up mid-Week-3 scoring). Now it plainly states what's happening and shows
+ *  exactly what was picked, dual-aware (Boy/Girl, with which one is actually scoring once the
+ *  commissioner has set the day type) or single (pre-Week-4 legacy weeks). */
+function renderLockedSafePick(container, state, currentManagerId, episode) {
+  const week = episode.episodeNumber;
+  const picks = (state.safePicks?.[String(week)] ?? []).filter((p) => p.managerId === currentManagerId);
+  const dayType = episode.safePickDayType;
+  const dayTypeText = dayType === 'boy' ? 'a Boy Day' : dayType === 'girl' ? 'a Girl Day' : dayType === 'both' ? 'a Double Elimination day' : null;
+  const lockedIntro = `<p><strong>Episode ${week} is being scored &mdash; Safe Picks are locked.</strong>${
+    dayTypeText ? ` The commissioner has marked this as ${dayTypeText}.` : ''
+  }</p>`;
+
+  if (!isDualSafePickWeek(week)) {
+    const pick = picks[0];
+    const line = pick
+      ? `<p><strong>Your Week ${week} Safe Pick:</strong> ${castName(state, pick.castId)}</p>`
+      : `<p>You didn't submit a Week ${week} Safe Pick.</p>`;
+    container.innerHTML = lockedIntro + line;
     return;
   }
 
-  const week = nextEpisodeNumber(state);
+  const boyPick = picks.find((p) => castGender(state, p.castId) === 'M');
+  const girlPick = picks.find((p) => castGender(state, p.castId) === 'F');
+  const genderLine = (pick, gender, label) => {
+    if (!pick) return `${label}: <span style="color:var(--text-muted, #9a9590);">not submitted</span>`;
+    const name = castName(state, pick.castId);
+    if (!dayType) return `${label}: ${name}`;
+    return safePickGenderIncluded(dayType, gender) ? `${label}: ${name} &mdash; scoring` : `${label}: ${name} &mdash; reserved (not this week, still available later)`;
+  };
+  container.innerHTML = `
+    ${lockedIntro}
+    <p><strong>Your Week ${week} picks:</strong></p>
+    <ul>
+      <li>${genderLine(boyPick, 'M', 'Boy')}</li>
+      <li>${genderLine(girlPick, 'F', 'Girl')}</li>
+    </ul>
+  `;
+}
+
+/** Weeks 1-3: one mandatory-optional pick. Week 4+: a boy AND a girl pick, both mandatory —
+ *  submitted together via a single Submit. Whichever gender doesn't end up mattering that
+ *  episode goes back in reserve (see scoring.js) rather than being consumed. */
+function renderOpenSafePick(container, state, currentManagerId, week, { onSubmitSafePick, onClearSafePick }) {
   const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
   const outcomes = mySafePickOutcomes(state, currentManagerId);
-  const existingPick = (state.safePicks?.[String(week)] ?? []).find((p) => p.managerId === currentManagerId);
   const seasonPoints = computeCastSeasonPoints(state);
+  const dual = isDualSafePickWeek(week);
+
+  const existingPicks = (state.safePicks?.[String(week)] ?? []).filter((p) => p.managerId === currentManagerId);
+  const existingBoyPick = existingPicks.find((p) => castGender(state, p.castId) === 'M');
+  const existingGirlPick = existingPicks.find((p) => castGender(state, p.castId) === 'F');
+  const existingPick = existingPicks[0]; // legacy (non-dual) weeks only ever have one
 
   // Two-step dropdown + Submit, not tap-to-pick: a stray tap on the card grid used to submit a
   // safe pick immediately with no confirmation, which Jay flagged as too easy to fat-finger.
   // The card grid below stays purely visual (status/dimming reference) — the dropdown is the
   // only thing that actually submits.
   const usedCastIds = getUsedSafePicks(state, currentManagerId);
-  if (existingPick) usedCastIds.delete(existingPick.castId);
-  const availableOptions = state.cast
-    .filter((c) => !eliminationEpisodes.has(c.id) && !usedCastIds.has(c.id))
-    .map((c) => `<option value="${c.id}" ${existingPick?.castId === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
-    .join('');
+  existingPicks.forEach((p) => usedCastIds.delete(p.castId));
 
+  const optionsFor = (gender, selectedCastId) =>
+    state.cast
+      .filter((c) => (gender ? c.gender === gender : true) && !eliminationEpisodes.has(c.id) && !usedCastIds.has(c.id))
+      .map((c) => `<option value="${c.id}" ${selectedCastId === c.id ? 'selected' : ''}>${castNameWithGender(state, c.id)}</option>`)
+      .join('');
+
+  const existingCastIds = new Set(existingPicks.map((p) => p.castId));
   const cardsHtml = state.cast
     .map((c) => {
-      const isCurrentPick = existingPick?.castId === c.id;
+      const isCurrentPick = existingCastIds.has(c.id);
       const outcome = outcomes.get(c.id);
       const eliminated = eliminationEpisodes.has(c.id);
 
@@ -346,27 +403,74 @@ export function renderSafePick(container, state, currentManagerId, { onSubmitSaf
       if (eliminated && !isCurrentPick) {
         return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText: 'Eliminated', eliminated: true });
       }
-      const statusText = isCurrentPick ? `Week ${week} Pick` : castNameWithGender(state, c.id);
+      const genderLabel = dual ? (existingBoyPick?.castId === c.id ? 'Boy' : existingGirlPick?.castId === c.id ? 'Girl' : null) : null;
+      const statusText = isCurrentPick ? `Week ${week}${genderLabel ? ` ${genderLabel}` : ''} Pick` : castNameWithGender(state, c.id);
       return castCardHtml(state, c.id, { points: seasonPoints.get(c.id) ?? 0, statusText, extraClass: isCurrentPick ? 'sp-chosen' : '' });
     })
     .join('');
 
+  if (!dual) {
+    container.innerHTML = `
+      <p>Pick who you think survives Week ${week}'s episode from the dropdown below, then hit Submit &mdash;
+      +${SAFE_PICK_POINTS} points if they do. Each cast member can only be used once all season, and this locks
+      the moment the commissioner starts entering Week ${week}'s results.</p>
+      ${existingPick ? `<p><strong>Current pick:</strong> ${castName(state, existingPick.castId)} <button id="safe-pick-clear-btn" class="btn-inline" style="background:#7a2020;">Clear</button></p>` : ''}
+      <div class="control-row">
+        <select id="safe-pick-select">${optionsFor(null, existingPick?.castId)}</select>
+        <button id="safe-pick-submit-btn">Submit</button>
+      </div>
+      <div class="cast-grid compact">${cardsHtml}</div>
+    `;
+    container.querySelector('#safe-pick-submit-btn').addEventListener('click', () => {
+      onSubmitSafePick(container.querySelector('#safe-pick-select').value);
+    });
+    container.querySelector('#safe-pick-clear-btn')?.addEventListener('click', () => onClearSafePick());
+    return;
+  }
+
   container.innerHTML = `
-    <p>Pick who you think survives Week ${week}'s episode from the dropdown below, then hit Submit &mdash;
-    +${SAFE_PICK_POINTS} points if they do. Each cast member can only be used once all season, and this locks
-    the moment the commissioner starts entering Week ${week}'s results.</p>
-    ${existingPick ? `<p><strong>Current pick:</strong> ${castName(state, existingPick.castId)} <button id="safe-pick-clear-btn" class="btn-inline" style="background:#7a2020;">Clear</button></p>` : ''}
+    <p>Pick who you think survives Week ${week}'s episode &mdash; one boy, one girl, both required.
+    Once the episode airs, the commissioner will mark it a Boy Day, Girl Day, or Double Elimination;
+    whichever pick doesn't apply goes back in reserve so you can use that cast member again another
+    week. +${SAFE_PICK_POINTS} points per pick that survives and actually scores.</p>
+    <p><strong>Current picks:</strong>
+      Boy &mdash; ${existingBoyPick ? castName(state, existingBoyPick.castId) : '(none yet)'}
+      ${existingBoyPick ? `<button id="safe-pick-clear-boy-btn" class="btn-inline" style="background:#7a2020;">Clear</button>` : ''}
+      &nbsp;|&nbsp;
+      Girl &mdash; ${existingGirlPick ? castName(state, existingGirlPick.castId) : '(none yet)'}
+      ${existingGirlPick ? `<button id="safe-pick-clear-girl-btn" class="btn-inline" style="background:#7a2020;">Clear</button>` : ''}
+    </p>
     <div class="control-row">
-      <select id="safe-pick-select">${availableOptions}</select>
-      <button id="safe-pick-submit-btn">Submit</button>
+      <select id="safe-pick-boy-select">${optionsFor('M', existingBoyPick?.castId)}</select>
+      <select id="safe-pick-girl-select">${optionsFor('F', existingGirlPick?.castId)}</select>
+      <button id="safe-pick-submit-btn">Submit Both</button>
     </div>
     <div class="cast-grid compact">${cardsHtml}</div>
   `;
 
   container.querySelector('#safe-pick-submit-btn').addEventListener('click', () => {
-    onSubmitSafePick(container.querySelector('#safe-pick-select').value);
+    const boyCastId = container.querySelector('#safe-pick-boy-select').value;
+    const girlCastId = container.querySelector('#safe-pick-girl-select').value;
+    onSubmitSafePick({ boyCastId, girlCastId });
   });
-  container.querySelector('#safe-pick-clear-btn')?.addEventListener('click', onClearSafePick);
+  container.querySelector('#safe-pick-clear-boy-btn')?.addEventListener('click', () => onClearSafePick('M'));
+  container.querySelector('#safe-pick-clear-girl-btn')?.addEventListener('click', () => onClearSafePick('F'));
+}
+
+export function renderSafePick(container, state, currentManagerId, { onSubmitSafePick, onClearSafePick }) {
+  if (!currentManagerId) {
+    container.innerHTML = `<p>Pick your identity above to make a safe pick.</p>`;
+    return;
+  }
+
+  const currentEpisode = getCurrentEpisode(state);
+  if (currentEpisode) {
+    renderLockedSafePick(container, state, currentManagerId, currentEpisode);
+    return;
+  }
+
+  const week = nextEpisodeNumber(state);
+  renderOpenSafePick(container, state, currentManagerId, week, { onSubmitSafePick, onClearSafePick });
 }
 
 /** Locks the moment Episode 1 is finalized — a one-time prediction, not a weekly action. */

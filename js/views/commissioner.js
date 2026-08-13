@@ -9,6 +9,8 @@ import {
   computeEligibleCastIds,
   computeNextDraftOrder,
   computeSeasonEndBonusPoints,
+  isDualSafePickWeek,
+  castGender,
 } from '../scoring.js';
 import { managerName, castName } from './shared.js';
 
@@ -299,6 +301,15 @@ export function nextEpisodeNumber(state) {
   return last ? last.episodeNumber + 1 : 1;
 }
 
+/** The week Safe Picks are actually open for right now, or null if none is (an episode is
+ *  currently being scored, so that week's picks are locked and the next week isn't open yet).
+ *  `nextEpisodeNumber` alone isn't this — it advances the instant an episode *starts*, well
+ *  before it's finalized, which is exactly what silently locked a manager's Safe Pick screen
+ *  with no explanation. */
+export function currentOpenSafePickWeek(state) {
+  return getCurrentEpisode(state) ? null : nextEpisodeNumber(state);
+}
+
 /** Episode N can't start until that week's roster is actually set: the preseason draft for
  *  Episode 1, or that week's redraft for Episode 2+ — unless rosters are frozen, in which case
  *  there's no more redrafting for the rest of the season and episodes just keep going. */
@@ -335,6 +346,7 @@ export function renderEpisodeEntry(
     onSaveEliminations,
     onFinalizeEpisode,
     onUnfinalizeEpisode,
+    onSetSafePickDayType,
   }
 ) {
   const episode = getCurrentEpisode(state);
@@ -424,6 +436,33 @@ export function renderEpisodeEntry(
     : '(none saved yet)';
 
   const isReopened = state.episodes.some((e) => e.finalized && e.episodeNumber > episode.episodeNumber);
+
+  // From Week 4 on, every manager submits a boy AND girl Safe Pick — the commissioner decides
+  // which gender(s) actually got put at risk this episode, and that's what actually scores.
+  // Required before Finalize is allowed so an episode can never lock in with an ambiguous
+  // (or forgotten) day type — see safePickGenderIncluded/getUsedSafePicks in scoring.js for how
+  // the unscored gender's pick goes back in reserve rather than being lost.
+  const dualSafePickWeek = isDualSafePickWeek(episode.episodeNumber);
+  const dayTypeBtn = (type, label) => {
+    const isActive = episode.safePickDayType === type;
+    return `<button data-day-type="${type}" style="${isActive ? 'background:var(--neon-blue, #1081f5); font-weight:700;' : ''}">${isActive ? '✓ ' : ''}${label}</button>`;
+  };
+  const dayTypeHtml = dualSafePickWeek
+    ? `<h4>Safe Pick Day Type</h4>
+       <p class="note">Which gender's Safe Picks actually score this episode? The other gender's pick goes back in reserve for a future week — nothing is lost. Must be set before you can finalize.</p>
+       <div class="actions">
+         ${dayTypeBtn('boy', 'Boy Day')}
+         ${dayTypeBtn('girl', 'Girl Day')}
+         ${dayTypeBtn('both', 'Both (Double Elimination)')}
+       </div>
+       ${episode.safePickDayType ? '' : `<p class="note" style="color:var(--neon-red, #e21e15);">Not set yet.</p>`}`
+    : '';
+  const finalizeDisabled = dualSafePickWeek && !episode.safePickDayType;
+  const finalizeBtnHtml = finalizeDisabled
+    ? `<button id="finalize-episode-btn" disabled>Finalize Episode ${episode.episodeNumber}</button>
+       <p class="note">Choose a Safe Pick Day Type above first.</p>`
+    : `<button id="finalize-episode-btn">Finalize Episode ${episode.episodeNumber}</button>`;
+
   container.innerHTML = `
     <h3>Episode ${episode.episodeNumber} ${isReopened ? '(reopened for corrections)' : '(in progress)'}</h3>
     ${isReopened ? `<p style="color:var(--neon-red, #e21e15);">This episode has already-finalized episodes after it. Don't forget to finalize it again when you're done.</p>` : ''}
@@ -442,8 +481,10 @@ export function renderEpisodeEntry(
     <button id="save-eliminations-btn">Save Eliminations</button>
     <p><strong>Saved:</strong> ${savedEliminationsText}</p>
 
+    ${dayTypeHtml}
+
     <h4>Finalize</h4>
-    <button id="finalize-episode-btn">Finalize Episode ${episode.episodeNumber}</button>
+    ${finalizeBtnHtml}
 
     <h4>Finalized Episodes</h4>
     ${finalizedEpisodesHtml(state)}
@@ -465,7 +506,11 @@ export function renderEpisodeEntry(
     onSaveEliminations(castIds);
   });
 
-  container.querySelector('#finalize-episode-btn').addEventListener('click', () => {
+  container.querySelectorAll('[data-day-type]').forEach((btn) => {
+    btn.addEventListener('click', () => onSetSafePickDayType(btn.dataset.dayType));
+  });
+
+  container.querySelector('#finalize-episode-btn')?.addEventListener('click', () => {
     if (confirm(`Finalize Episode ${episode.episodeNumber}? This locks its scoring into the leaderboard.`)) {
       onFinalizeEpisode();
     }
@@ -563,13 +608,66 @@ function joinNames(names) {
   return `${names.slice(0, -1).join(', ')}, and ${names[names.length - 1]}`;
 }
 
-/** Active managers who haven't submitted a Safe Pick for the currently-open week yet. Reuses
- *  nextEpisodeNumber unchanged — it's the same "currently open" week renderSafePick itself uses,
- *  so this always matches what a manager actually sees on their own screen. */
+/** Everyone's Safe Pick for the week that actually matters right now — the one being scored if
+ *  the commissioner is mid-episode, otherwise the currently open week. Lets Jay see every pick at
+ *  a glance instead of asking around or hunting through each manager's own screen (the gap that
+ *  caused the Week 3 confusion). From Week 4 on, shows each manager's boy AND girl pick, and once
+ *  a day type is chosen, marks which one is actually being scored vs. put back in reserve. */
+export function renderSafePicksOverview(container, state) {
+  const currentEpisode = getCurrentEpisode(state);
+  const week = currentEpisode?.episodeNumber ?? nextEpisodeNumber(state);
+  const dual = isDualSafePickWeek(week);
+  const dayType = currentEpisode?.safePickDayType ?? null;
+  const weekPicks = state.safePicks?.[String(week)] ?? [];
+  const activeManagers = state.managers.filter((m) => m.active);
+
+  const pickLabel = (pick, gender) => {
+    if (!pick) return '<span style="color:var(--text-muted, #9a9590);">&mdash; not submitted &mdash;</span>';
+    const name = castName(state, pick.castId);
+    if (!dual || !dayType) return name;
+    const included = dayType === 'both' || (dayType === 'boy' && gender === 'M') || (dayType === 'girl' && gender === 'F');
+    return included ? `${name} &mdash; scoring` : `${name} &mdash; reserved (not this week)`;
+  };
+
+  const rows = activeManagers
+    .map((m) => {
+      const picks = weekPicks.filter((p) => p.managerId === m.id);
+      if (!dual) {
+        return `<li><strong>${m.name}</strong>: ${pickLabel(picks[0], null)}</li>`;
+      }
+      const boyPick = picks.find((p) => castGender(state, p.castId) === 'M');
+      const girlPick = picks.find((p) => castGender(state, p.castId) === 'F');
+      return `<li><strong>${m.name}</strong> &mdash; Boy: ${pickLabel(boyPick, 'M')} &nbsp;|&nbsp; Girl: ${pickLabel(girlPick, 'F')}</li>`;
+    })
+    .join('');
+
+  const statusNote = currentEpisode
+    ? `Episode ${week} is being scored &mdash; these picks are locked.`
+    : `Week ${week} is currently open for picking.`;
+
+  container.innerHTML = `
+    <p class="note">${statusNote}</p>
+    <ul>${rows}</ul>
+  `;
+}
+
+/** Active managers who haven't submitted a Safe Pick for the currently-open week yet — null week
+ *  (nobody's missing) while an episode is being scored, matching what a manager actually sees on
+ *  their own screen. From Week 4 on, both a boy AND a girl pick are required — "missing" means
+ *  either one is still unsubmitted. */
 function missingSafePicks(state) {
-  const week = nextEpisodeNumber(state);
-  const submittedIds = new Set((state.safePicks?.[String(week)] ?? []).map((p) => p.managerId));
-  return { week, missing: state.managers.filter((m) => m.active && !submittedIds.has(m.id)) };
+  const week = currentOpenSafePickWeek(state);
+  if (week === null) return { week, missing: [] };
+  const weekPicks = state.safePicks?.[String(week)] ?? [];
+  const dual = isDualSafePickWeek(week);
+  const missing = state.managers.filter((m) => {
+    if (!m.active) return false;
+    const picks = weekPicks.filter((p) => p.managerId === m.id);
+    if (!dual) return picks.length === 0;
+    const genders = new Set(picks.map((p) => castGender(state, p.castId)));
+    return !genders.has('M') || !genders.has('F');
+  });
+  return { week, missing };
 }
 
 /** Whoever is currently holding up a turn-based draft — the preseason draft if it's still
@@ -616,7 +714,11 @@ export function renderReminders(container, state) {
   // Disabled buttons are silent by nature (a tap does nothing, browser-enforced) — a title
   // tooltip doesn't help on a phone with no hover, so the reason has to be plain visible text,
   // not just a dimmed button, or a disabled tap reads as "broken" rather than "nothing to do."
-  const safeReasonHtml = missing.length ? '' : `<p class="note">✓ Everyone's already submitted Week ${safeWeek}'s Safe Pick.</p>`;
+  const safeReasonHtml = missing.length
+    ? ''
+    : safeWeek === null
+      ? `<p class="note">No Safe Pick week is currently open — an episode is being scored.</p>`
+      : `<p class="note">✓ Everyone's already submitted Week ${safeWeek}'s Safe Pick.</p>`;
   const turnReasonHtml = turn ? '' : `<p class="note">No draft or redraft is currently active — nobody's turn to nudge.</p>`;
 
   container.innerHTML = `

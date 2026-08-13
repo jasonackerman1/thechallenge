@@ -5,7 +5,7 @@
 import { loadCredentials, saveCredentials, loadCachedState, saveCachedState, loadPlayerIdentity, savePlayerIdentity } from './state.js';
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
-import { computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks } from './scoring.js';
+import { computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks, isDualSafePickWeek, castGender } from './scoring.js';
 import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, reorderRemainingSlots, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
 import {
   renderPreseasonDraft,
@@ -13,6 +13,7 @@ import {
   renderWeeklyRedraft,
   renderFinalChallengeEntry,
   renderReminders,
+  renderSafePicksOverview,
   getCurrentEpisode,
   nextEpisodeNumber,
   rostersReadyForEpisode,
@@ -46,6 +47,7 @@ const els = {
   passwordInput: document.getElementById('password-input'),
   commissionerPanel: document.getElementById('commissioner-panel'),
   remindersContainer: document.getElementById('reminders-container'),
+  safePicksOverviewContainer: document.getElementById('safe-picks-overview-container'),
   draftContainer: document.getElementById('draft-container'),
   episodeContainer: document.getElementById('episode-container'),
   redraftContainer: document.getElementById('redraft-container'),
@@ -93,6 +95,7 @@ function render(state) {
     renderRedraft();
     renderFinalChallenge();
     renderReminders(els.remindersContainer, state);
+    renderSafePicksOverview(els.safePicksOverviewContainer, state);
   }
 }
 
@@ -176,34 +179,56 @@ function renderPlayerView() {
     },
   });
   renderSafePick(els.safePickContainer, currentState, currentManagerId, {
-    onSubmitSafePick: (castId) =>
+    // Legacy (pre-Week-4) weeks pass a single castId string; Week 4+ passes { boyCastId, girlCastId }
+    // since both a boy and a girl pick are now mandatory every week.
+    onSubmitSafePick: (payload) =>
       runMutation((fresh) => {
         const managerId = loadPlayerIdentity();
         const week = nextEpisodeNumber(fresh);
         const usedCastIds = getUsedSafePicks(fresh, managerId);
         const eliminatedCastIds = new Set(computeEliminationEpisodes(fresh.episodes).keys());
-        if (eliminatedCastIds.has(castId)) throw new Error('That cast member has already been eliminated.');
         const weekKey = String(week);
         const weekPicks = (fresh.safePicks[weekKey] ??= []);
-        const existing = weekPicks.find((p) => p.managerId === managerId);
-        if (usedCastIds.has(castId) && existing?.castId !== castId) {
-          throw new Error("You've already used that cast member for a safe pick this season.");
-        }
-        if (existing) {
-          existing.castId = castId;
-          existing.submittedAt = new Date().toISOString();
+        const dual = isDualSafePickWeek(week);
+
+        const upsertPick = (castId) => {
+          if (eliminatedCastIds.has(castId)) throw new Error('That cast member has already been eliminated.');
+          // Dual weeks have up to two picks per manager (one per gender) — find the slot for this
+          // castId's gender specifically. Legacy weeks have exactly one, so managerId alone finds it.
+          const existing = weekPicks.find(
+            (p) => p.managerId === managerId && (!dual || castGender(fresh, p.castId) === castGender(fresh, castId))
+          );
+          if (usedCastIds.has(castId) && existing?.castId !== castId) {
+            throw new Error("You've already used that cast member for a safe pick this season.");
+          }
+          if (existing) {
+            existing.castId = castId;
+            existing.submittedAt = new Date().toISOString();
+          } else {
+            weekPicks.push({ managerId, castId, submittedAt: new Date().toISOString() });
+          }
+        };
+
+        if (dual) {
+          if (!payload?.boyCastId || !payload?.girlCastId) throw new Error('Both a boy and a girl Safe Pick are required.');
+          upsertPick(payload.boyCastId);
+          upsertPick(payload.girlCastId);
         } else {
-          weekPicks.push({ managerId, castId, submittedAt: new Date().toISOString() });
+          upsertPick(payload);
         }
         return fresh;
       }),
-    onClearSafePick: () =>
+    // Legacy weeks clear with no argument (the manager's one pick); Week 4+ passes 'M' or 'F' to
+    // clear just that gender's pick, since the other one is still required.
+    onClearSafePick: (gender) =>
       runMutation((fresh) => {
         const managerId = loadPlayerIdentity();
         const week = nextEpisodeNumber(fresh);
         const weekKey = String(week);
         if (fresh.safePicks[weekKey]) {
-          fresh.safePicks[weekKey] = fresh.safePicks[weekKey].filter((p) => p.managerId !== managerId);
+          fresh.safePicks[weekKey] = fresh.safePicks[weekKey].filter(
+            (p) => !(p.managerId === managerId && (!gender || castGender(fresh, p.castId) === gender))
+          );
         }
         return fresh;
       }),
@@ -333,7 +358,11 @@ function renderEpisode() {
       }),
     onFinalizeEpisode: () =>
       runMutation((fresh) => {
-        getCurrentEpisode(fresh).finalized = true;
+        const episode = getCurrentEpisode(fresh);
+        if (isDualSafePickWeek(episode.episodeNumber) && !episode.safePickDayType) {
+          throw new Error('Choose a Safe Pick Day Type (Boy/Girl/Both) before finalizing this episode.');
+        }
+        episode.finalized = true;
         return fresh;
       }),
     onUnfinalizeEpisode: (episodeNumber) =>
@@ -341,6 +370,11 @@ function renderEpisode() {
         const target = fresh.episodes.find((e) => e.episodeNumber === episodeNumber);
         if (!target) throw new Error(`Episode ${episodeNumber} not found.`);
         target.finalized = false;
+        return fresh;
+      }),
+    onSetSafePickDayType: (dayType) =>
+      runMutation((fresh) => {
+        getCurrentEpisode(fresh).safePickDayType = dayType;
         return fresh;
       }),
   });
@@ -542,6 +576,7 @@ function boot() {
       renderRedraft();
       renderFinalChallenge();
       renderReminders(els.remindersContainer, currentState);
+      renderSafePicksOverview(els.safePicksOverviewContainer, currentState);
     } else {
       setStatus('Wrong commissioner password.', true);
     }
