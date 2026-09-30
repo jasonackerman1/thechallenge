@@ -101,7 +101,9 @@ export function renderLeaderboard(container, state, currentManagerId, { onManage
         <div class="lb-row ${isYou ? 'you' : ''} ${row.rank === 1 ? 'rank-1' : ''}">
           <div class="lb-rank">${row.rank}</div>
           <div class="lb-info">
-            <button type="button" class="lb-name" data-manager-id="${row.managerId}">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}<span class="lb-name-hint">History &rsaquo;</span></button>
+            ${onManagerClick
+              ? `<button type="button" class="lb-name" data-manager-id="${row.managerId}">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}<span class="lb-name-hint">History &rsaquo;</span></button>`
+              : `<div class="lb-name">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}</div>`}
             <div class="lb-bar-track"><div class="lb-bar-fill" style="width:${barPct}%"></div></div>
             <div class="lb-breakdown">This week +${row.thisWeekRosterPoints} &middot; Safe pick +${row.thisWeekSafePickPoints} &middot; Bonus +${row.bonusPoints}</div>
             <div class="lb-team">Team: ${teamText}</div>

@@ -175,8 +175,10 @@ function renderPlayerView() {
     els.castBrowserSection.open = true;
   }
 
+  // Manager history is commissioner-only, same Jay-only gate as the Commissioner section above —
+  // without the handler, the leaderboard renders plain (non-tappable) names.
   renderLeaderboard(els.leaderboardContainer, currentState, currentManagerId, {
-    onManagerClick: (managerId) => {
+    onManagerClick: currentManagerId !== 'jay' ? undefined : (managerId) => {
       renderManagerHistoryModal(els.castBioModal, currentState, managerId);
       els.castBioModal.style.display = 'flex';
       els.castBioModal.scrollTop = 0;

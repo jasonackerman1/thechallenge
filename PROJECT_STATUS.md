@@ -66,6 +66,9 @@ own point functions, so each manager's weekly totals add up exactly to their lea
 button rule had stretched full width (now truly top-right, cast bio modal too). Verified with a
 mocked-Gist headless browser run: zero console errors, no real GitHub calls.
 
+**Same day: made commissioner-only** at Jay's request — uses the same Jay-only identity check as
+the Commissioner section. Everyone else sees plain, non-tappable names with no "History" hint.
+
 ## Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks — 2026-08-13 (`50d941a`)
 
 Jay reported Week 3 scoring was clunky: a manager tried to resubmit his already-locked Week 3
