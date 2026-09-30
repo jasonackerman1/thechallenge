@@ -118,7 +118,6 @@ export function renderPreseasonDraft(container, state, { onStartDraft, onPick, o
   }
 
   const round1Order = draft.board[0].map((managerId) => managerName(state, managerId)).join(' &rarr; ');
-
   renderDraftPicker(container, state, {
     board: draft.board,
     picks: draft.picks,
@@ -152,6 +151,130 @@ export function nextRedraftWeek(state) {
     .sort((a, b) => a - b);
   const last = weeks[weeks.length - 1];
   return last ? last + 1 : 2;
+}
+
+/** Commissioner Assign mode: a per-week switch that lets the commissioner place any remaining
+ *  cast member on any manager's team, in any order, with no turn order enforced — built for the
+ *  Week 10 "teams get randomly assigned" ruling (randomizing happens outside the app). Stored as
+ *  the single week number it applies to (`meta.commissionerAssignWeek`), so it automatically stops
+ *  applying the moment the next week comes around — Week 11 goes back to a normal draft unless
+ *  the commissioner flips it on again. Returns that week if the mode applies right now, else null. */
+export function commissionerAssignWeek(state) {
+  const week = state.meta.commissionerAssignWeek;
+  if (week == null || state.meta.rosterFrozen) return null;
+  const relevant = getCurrentRedraftWeek(state) ?? nextRedraftWeek(state);
+  return week === relevant ? week : null;
+}
+
+/** A commissioner-assigned week whose assignments are all placed (so the draft reads as complete
+ *  and drops out of the live picker), but whose episode hasn't started yet — still fixable via
+ *  Remove, since the last assignment otherwise completes the draft instantly with no way back
+ *  short of editing the Gist by hand. */
+export function editableAssignedWeek(state) {
+  const week = state.meta.commissionerAssignWeek;
+  if (week == null || state.meta.rosterFrozen) return null;
+  if (getCurrentRedraftWeek(state) !== null) return null;
+  const weeks = Object.keys(state.drafts.weekly).map(Number);
+  if (!weeks.length || Math.max(...weeks) !== week) return null;
+  if (state.episodes.some((e) => e.episodeNumber === week)) return null;
+  return week;
+}
+
+function assignModeControlHtml(state, week) {
+  const on = state.meta.commissionerAssignWeek === week;
+  return on
+    ? `<p><strong>Commissioner Assign is ON for Week ${week}</strong> &mdash; you place every player; everyone else's draft screen shows "Roster locked." <button id="assign-toggle-btn" class="btn-inline">Turn Off</button></p>`
+    : `<button id="assign-toggle-btn" class="btn-inline">Commissioner Assign (Week ${week})</button>`;
+}
+
+function attachAssignToggleListener(container, state, week, onToggleAssignMode) {
+  container.querySelector('#assign-toggle-btn')?.addEventListener('click', () => {
+    const willTurnOn = state.meta.commissionerAssignWeek !== week;
+    if (willTurnOn) {
+      if (
+        !confirm(
+          `Turn on Commissioner Assign for Week ${week}? You'll put every player on a team yourself, in any order — no draft order. Everyone else's draft screen will show "Roster locked." It turns itself off once Week ${week} is over.`
+        )
+      ) {
+        return;
+      }
+    } else {
+      const draft = state.drafts.weekly[String(week)];
+      if (draft && draft.picks.length) {
+        alert(`Week ${week} already has assignments made. Reset the Week ${week} redraft first if you want to go back to a normal draft.`);
+        return;
+      }
+    }
+    onToggleAssignMode(week, willTurnOn);
+  });
+}
+
+function attachAssignRemoveListeners(container, state, week, onUnassign) {
+  container.querySelectorAll('[data-unassign-cast]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const castId = btn.dataset.unassignCast;
+      const managerId = btn.dataset.unassignManager;
+      if (confirm(`Remove ${castName(state, castId)} from ${managerName(state, managerId)}'s Week ${week} team? They go back into the available pool.`)) {
+        onUnassign({ week, castId });
+      }
+    });
+  });
+}
+
+function assignedRosterListHtml(state, draft, { removable }) {
+  return draft.board[0]
+    .map((managerId) => {
+      const rosterIds = getRosterForManager(draft.picks, managerId);
+      const items = rosterIds
+        .map((castId) => {
+          const removeBtn = removable
+            ? ` <button class="btn-inline" data-unassign-cast="${castId}" data-unassign-manager="${managerId}" style="background:#7a2020; padding:2px 8px; font-size:0.75rem;">Remove</button>`
+            : '';
+          return `${castNameWithGender(state, castId)}${removeBtn}`;
+        })
+        .join(', ');
+      return `<li><strong>${managerName(state, managerId)}</strong> (${rosterIds.length}): ${items || '(none yet)'}</li>`;
+    })
+    .join('');
+}
+
+/** The Commissioner Assign picker: pick any cast member + any manager, in any order. */
+function renderAssignPicker(container, state, { week, draft, eliminatedCastIds, headerHtml, onAssign, onUnassign, onReset }) {
+  const available = getAvailableCast(state.cast.map((c) => c.id), eliminatedCastIds, draft.picks);
+  const castOptions = available
+    .map((id) => {
+      const cast = state.cast.find((c) => c.id === id);
+      return `<option value="${id}">${cast.name} (${cast.team}${cast.gender ? ', ' + cast.gender : ''})</option>`;
+    })
+    .join('');
+  const managerOptions = draft.board[0]
+    .filter((managerId) => getRosterForManager(draft.picks, managerId).length < draft.board.length)
+    .map((managerId) => `<option value="${managerId}">${managerName(state, managerId)} (${getRosterForManager(draft.picks, managerId).length} so far)</option>`)
+    .join('');
+
+  container.innerHTML = `
+    ${headerHtml}
+    <p>${available.length} cast left to assign.</p>
+    <ul>${assignedRosterListHtml(state, draft, { removable: true })}</ul>
+    <h4>Assign a Player</h4>
+    <div class="control-row">
+      <select id="assign-cast-select">${castOptions}</select>
+      <select id="assign-manager-select">${managerOptions}</select>
+      <button id="assign-btn">Assign</button>
+    </div>
+    <button id="redraft-reset-btn" style="background:#7a2020;">Reset Week ${week} Redraft</button>
+  `;
+
+  container.querySelector('#assign-btn').addEventListener('click', () => {
+    const castId = container.querySelector('#assign-cast-select').value;
+    const managerId = container.querySelector('#assign-manager-select').value;
+    if (!castId || !managerId) return;
+    if (confirm(`Put ${castName(state, castId)} on ${managerName(state, managerId)}'s Week ${week} team?`)) {
+      onAssign({ week, managerId, castId });
+    }
+  });
+  attachAssignRemoveListeners(container, state, week, onUnassign);
+  container.querySelector('#redraft-reset-btn').addEventListener('click', onReset);
 }
 
 /** Past weekly redrafts, most recent first, with a flag on any manager who ended up short of
@@ -226,7 +349,7 @@ function attachTwistListener(container, state, onToggleTwistRevealed) {
   });
 }
 
-export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onFixRedraftOrder, onToggleFreeze, onToggleTwistRevealed }) {
+export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, onResetRedraft, onFixRedraftOrder, onToggleFreeze, onToggleTwistRevealed, onToggleAssignMode, onAssign, onUnassign }) {
   const currentWeek = getCurrentRedraftWeek(state);
   const statusHtml = `${scarcityBannerHtml(state)}${twistControlHtml(state)}${freezeControlHtml(state)}`;
 
@@ -241,6 +364,22 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
     }
 
     const prevEpisode = state.episodes.find((e) => e.episodeNumber === week - 1);
+    const editableWeek = editableAssignedWeek(state);
+    if (editableWeek !== null) {
+      const draft = state.drafts.weekly[String(editableWeek)];
+      container.innerHTML = `
+        ${statusHtml}
+        <h4>Week ${editableWeek} Teams (Commissioner Assigned)</h4>
+        <p>Every player is placed. You can still remove one to fix a mistake, up until Episode ${editableWeek} starts.</p>
+        <ul>${assignedRosterListHtml(state, draft, { removable: true })}</ul>
+        ${redraftHistoryHtml(state)}
+      `;
+      attachAssignRemoveListeners(container, state, editableWeek, onUnassign);
+      attachFreezeListener(container, state, onToggleFreeze);
+      attachTwistListener(container, state, onToggleTwistRevealed);
+      return;
+    }
+
     if (!prevEpisode || !prevEpisode.finalized) {
       container.innerHTML = `${statusHtml}<p>Waiting on Episode ${week - 1} to be finalized before the Week ${week} redraft can start.</p>${redraftHistoryHtml(state)}`;
       attachFreezeListener(container, state, onToggleFreeze);
@@ -258,10 +397,12 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
       <p><strong>Week ${week} draft order (reverse standings, same order every round):</strong> ${orderPreview}</p>
       <p>${eligibleCastIds.length} cast remaining, ${activeManagers.length} active managers
       &rarr; targeting ${TARGET_ROSTER_SIZE} per manager (whoever's picking when the pool runs out gets fewer).</p>
+      ${assignModeControlHtml(state, week)}
       <button id="start-redraft-btn">Start Week ${week} Redraft</button>
       ${redraftHistoryHtml(state)}
     `;
     container.querySelector('#start-redraft-btn').addEventListener('click', onStartRedraft);
+    attachAssignToggleListener(container, state, week, onToggleAssignMode);
     attachFreezeListener(container, state, onToggleFreeze);
   attachTwistListener(container, state, onToggleTwistRevealed);
     return;
@@ -270,20 +411,38 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
   const draft = state.drafts.weekly[String(currentWeek)];
   const eliminatedCastIds = new Set(computeEliminationEpisodes(state.episodes).keys());
   const round1Order = draft.board[0].map((managerId) => managerName(state, managerId)).join(' &rarr; ');
+  const onReset = () => {
+    if (confirm(`Reset the Week ${currentWeek} redraft? This clears every pick made so far.`)) onResetRedraft();
+  };
+
+  if (commissionerAssignWeek(state) === currentWeek) {
+    renderAssignPicker(container, state, {
+      week: currentWeek,
+      draft,
+      eliminatedCastIds,
+      headerHtml: `${statusHtml}<h4>Week ${currentWeek} Redraft</h4>${assignModeControlHtml(state, currentWeek)}`,
+      onAssign,
+      onUnassign,
+      onReset,
+    });
+    attachAssignToggleListener(container, state, currentWeek, onToggleAssignMode);
+    attachFreezeListener(container, state, onToggleFreeze);
+    attachTwistListener(container, state, onToggleTwistRevealed);
+    return;
+  }
 
   renderDraftPicker(container, state, {
     board: draft.board,
     picks: draft.picks,
     eliminatedCastIds,
     idPrefix: 'redraft',
-    headerHtml: `${statusHtml}<h4>Week ${currentWeek} Redraft</h4><p><strong>Draft order (reverse standings, same order every round):</strong> ${round1Order}</p>`,
+    headerHtml: `${statusHtml}<h4>Week ${currentWeek} Redraft</h4><p><strong>Draft order (reverse standings, same order every round):</strong> ${round1Order}</p>${assignModeControlHtml(state, currentWeek)}`,
     resetLabel: `Reset Week ${currentWeek} Redraft`,
     onPick,
-    onReset: () => {
-      if (confirm(`Reset the Week ${currentWeek} redraft? This clears every pick made so far.`)) onResetRedraft();
-    },
+    onReset,
     onFixOrder: onFixRedraftOrder,
   });
+  attachAssignToggleListener(container, state, currentWeek, onToggleAssignMode);
   attachFreezeListener(container, state, onToggleFreeze);
   attachTwistListener(container, state, onToggleTwistRevealed);
 }

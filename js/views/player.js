@@ -16,7 +16,7 @@ import {
   SCORING_EVENT_LABELS,
 } from '../scoring.js';
 import { flattenDraftBoard, getAvailableCast, getRosterForManager, isDraftComplete, TARGET_ROSTER_SIZE } from '../draft.js';
-import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber, getCurrentEpisode, rostersReadyForEpisode, safePickPhase } from './commissioner.js';
+import { getCurrentRedraftWeek, nextRedraftWeek, nextEpisodeNumber, getCurrentEpisode, rostersReadyForEpisode, safePickPhase, commissionerAssignWeek } from './commissioner.js';
 import { managerName, castName, castNameWithGender, castCardHtml } from './shared.js';
 import { CAST_BIOS } from '../bios.js';
 
@@ -235,6 +235,17 @@ export function renderMyRoster(container, state, currentManagerId, { onPick, onP
   }
 
   const currentWeek = getCurrentRedraftWeek(state);
+
+  if (currentWeek !== null && commissionerAssignWeek(state) === currentWeek) {
+    const draft = state.drafts.weekly[String(currentWeek)];
+    container.innerHTML = `
+      <p><strong>Roster locked.</strong></p>
+      <h4>Your Week ${currentWeek} Roster So Far</h4>
+      ${rosterCardsHtml(state, getRosterForManager(draft.picks, currentManagerId))}
+    `;
+    bindCastCardClicks(container, onCardClick);
+    return;
+  }
 
   if (currentWeek !== null) {
     const draft = state.drafts.weekly[String(currentWeek)];
@@ -643,6 +654,9 @@ export function computeSeasonStatusText(state) {
     return `Episode ${lastFinalized.episodeNumber} is scored — stay tuned for what's next!`;
   }
   const currentWeek = getCurrentRedraftWeek(state);
+  if (currentWeek !== null && commissionerAssignWeek(state) === currentWeek) {
+    return `Week ${currentWeek}: Roster locked.`;
+  }
   if (currentWeek !== null) {
     return `Week ${currentWeek} redraft is live — check My Roster if it's your turn!`;
   }

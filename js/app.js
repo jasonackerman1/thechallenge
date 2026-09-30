@@ -20,6 +20,8 @@ import {
   getCurrentRedraftWeek,
   nextRedraftWeek,
   safePickPhase,
+  commissionerAssignWeek,
+  editableAssignedWeek,
 } from './views/commissioner.js';
 import {
   renderIdentityModal,
@@ -179,6 +181,7 @@ function renderPlayerView() {
         const managerId = loadPlayerIdentity();
         const week = getCurrentRedraftWeek(fresh);
         if (week === null) throw new Error('No redraft is currently open.');
+        if (commissionerAssignWeek(fresh) === week) throw new Error('Roster locked.');
         const draft = fresh.drafts.weekly[String(week)];
         const flat = flattenDraftBoard(draft.board);
         const nextSlot = flat[draft.picks.length];
@@ -354,6 +357,46 @@ function renderRedraft() {
     onToggleTwistRevealed: () =>
       runMutation((fresh) => {
         fresh.meta.redraftTwistRevealed = !fresh.meta.redraftTwistRevealed;
+        return fresh;
+      }),
+    onToggleAssignMode: (week, turnOn) =>
+      runMutation((fresh) => {
+        if (turnOn) {
+          fresh.meta.commissionerAssignWeek = week;
+        } else {
+          const draft = fresh.drafts.weekly[String(week)];
+          if (draft && draft.picks.length) {
+            throw new Error(`Week ${week} already has assignments. Reset the redraft first to go back to a normal draft.`);
+          }
+          fresh.meta.commissionerAssignWeek = null;
+        }
+        return fresh;
+      }),
+    // Commissioner Assign: any cast member onto any manager's team, no turn order. `round` is
+    // just the first round index that manager hasn't used yet, so rosters stay well-formed for
+    // everything downstream (scoring, history, validatePick's per-manager cap).
+    onAssign: ({ week, managerId, castId }) =>
+      runMutation((fresh) => {
+        if (commissionerAssignWeek(fresh) !== week || getCurrentRedraftWeek(fresh) !== week) {
+          throw new Error(`Commissioner Assign isn't active for Week ${week} anymore — refresh and check.`);
+        }
+        const draft = fresh.drafts.weekly[String(week)];
+        const eliminatedCastIds = new Set(computeEliminationEpisodes(fresh.episodes).keys());
+        validatePick({ board: draft.board, picks: draft.picks, eliminatedCastIds, managerId, castId });
+        const usedRounds = new Set(draft.picks.filter((p) => p.managerId === managerId).map((p) => p.round));
+        let round = 0;
+        while (usedRounds.has(round)) round++;
+        draft.picks.push({ managerId, castId, round });
+        return fresh;
+      }),
+    onUnassign: ({ week, castId }) =>
+      runMutation((fresh) => {
+        const editable = commissionerAssignWeek(fresh) === week || editableAssignedWeek(fresh) === week;
+        if (!editable) throw new Error(`Week ${week} teams can't be changed anymore.`);
+        const draft = fresh.drafts.weekly[String(week)];
+        const before = draft.picks.length;
+        draft.picks = draft.picks.filter((p) => p.castId !== castId);
+        if (draft.picks.length === before) throw new Error('That player was already removed — refresh and check.');
         return fresh;
       }),
   });
