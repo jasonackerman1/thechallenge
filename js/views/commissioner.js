@@ -182,26 +182,33 @@ export function editableAssignedWeek(state) {
 
 function assignModeControlHtml(state, week) {
   const on = state.meta.commissionerAssignWeek === week;
-  return on
-    ? `<p><strong>Commissioner Assign is ON for Week ${week}</strong> &mdash; you place every player; everyone else's draft screen shows "Roster locked." <button id="assign-toggle-btn" class="btn-inline">Turn Off</button></p>`
-    : `<button id="assign-toggle-btn" class="btn-inline">Commissioner Assign (Week ${week})</button>`;
+  return `
+    <label class="switch-row">
+      <span class="switch"><input type="checkbox" id="assign-toggle" ${on ? 'checked' : ''} /><span class="switch-slider"></span></span>
+      <span><strong>Commissioner Assign</strong> ${on ? 'ON' : 'OFF'}</span>
+    </label>
+    ${on ? `<p style="font-size:0.85rem; color:var(--text-muted, #9a9590);">You place every player, in any order. Everyone else's draft screen shows "Roster locked." Turns itself off after Week ${week}.</p>` : ''}
+  `;
 }
 
 function attachAssignToggleListener(container, state, week, onToggleAssignMode) {
-  container.querySelector('#assign-toggle-btn')?.addEventListener('click', () => {
-    const willTurnOn = state.meta.commissionerAssignWeek !== week;
+  const toggle = container.querySelector('#assign-toggle');
+  toggle?.addEventListener('change', () => {
+    const willTurnOn = toggle.checked;
     if (willTurnOn) {
       if (
         !confirm(
           `Turn on Commissioner Assign for Week ${week}? You'll put every player on a team yourself, in any order — no draft order. Everyone else's draft screen will show "Roster locked." It turns itself off once Week ${week} is over.`
         )
       ) {
+        toggle.checked = false;
         return;
       }
     } else {
       const draft = state.drafts.weekly[String(week)];
       if (draft && draft.picks.length) {
         alert(`Week ${week} already has assignments made. Reset the Week ${week} redraft first if you want to go back to a normal draft.`);
+        toggle.checked = true;
         return;
       }
     }
@@ -397,12 +404,10 @@ export function renderWeeklyRedraft(container, state, { onStartRedraft, onPick, 
       <p><strong>Week ${week} draft order (reverse standings, same order every round):</strong> ${orderPreview}</p>
       <p>${eligibleCastIds.length} cast remaining, ${activeManagers.length} active managers
       &rarr; targeting ${TARGET_ROSTER_SIZE} per manager (whoever's picking when the pool runs out gets fewer).</p>
-      ${assignModeControlHtml(state, week)}
       <button id="start-redraft-btn">Start Week ${week} Redraft</button>
       ${redraftHistoryHtml(state)}
     `;
     container.querySelector('#start-redraft-btn').addEventListener('click', onStartRedraft);
-    attachAssignToggleListener(container, state, week, onToggleAssignMode);
     attachFreezeListener(container, state, onToggleFreeze);
   attachTwistListener(container, state, onToggleTwistRevealed);
     return;
