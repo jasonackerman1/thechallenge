@@ -7,6 +7,7 @@ import {
   computeEliminationEpisodes,
   computeCastSeasonPoints,
   computeCastPointsBreakdownByWeek,
+  computeManagerHistoryByWeek,
   getUsedSafePicks,
   isDualSafePickWeek,
   castGender,
@@ -72,7 +73,7 @@ export function renderIdentityIndicator(logoEl, { onSwitch }) {
   });
 }
 
-export function renderLeaderboard(container, state, currentManagerId) {
+export function renderLeaderboard(container, state, currentManagerId, { onManagerClick } = {}) {
   if (!state.episodes.some((e) => e.finalized)) {
     container.innerHTML = `<p>No episodes finalized yet — the leaderboard fills in once Episode 1 is scored.</p>`;
     return;
@@ -100,7 +101,7 @@ export function renderLeaderboard(container, state, currentManagerId) {
         <div class="lb-row ${isYou ? 'you' : ''} ${row.rank === 1 ? 'rank-1' : ''}">
           <div class="lb-rank">${row.rank}</div>
           <div class="lb-info">
-            <div class="lb-name">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}</div>
+            <button type="button" class="lb-name" data-manager-id="${row.managerId}">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}<span class="lb-name-hint">History &rsaquo;</span></button>
             <div class="lb-bar-track"><div class="lb-bar-fill" style="width:${barPct}%"></div></div>
             <div class="lb-breakdown">This week +${row.thisWeekRosterPoints} &middot; Safe pick +${row.thisWeekSafePickPoints} &middot; Bonus +${row.bonusPoints}</div>
             <div class="lb-team">Team: ${teamText}</div>
@@ -112,6 +113,11 @@ export function renderLeaderboard(container, state, currentManagerId) {
     .join('');
 
   container.innerHTML = rowsHtml;
+  if (onManagerClick) {
+    container.querySelectorAll('.lb-name[data-manager-id]').forEach((btn) => {
+      btn.addEventListener('click', () => onManagerClick(btn.dataset.managerId));
+    });
+  }
 }
 
 /** Whatever roster is currently "in effect" for a manager: the most recently completed weekly
@@ -794,6 +800,85 @@ export function renderCastBioModal(modalEl, state, castId) {
         `
         : `<p class="bio-meta">No bio on file yet.</p>`}
       ${castStatsHtml(state, castId)}
+    </div>
+  `;
+  modalEl.querySelector('#bio-close-btn').addEventListener('click', () => {
+    modalEl.style.display = 'none';
+  });
+  if (!modalEl.dataset.backdropBound) {
+    modalEl.addEventListener('click', (e) => {
+      if (e.target === modalEl) modalEl.style.display = 'none';
+    });
+    modalEl.dataset.backdropBound = 'true';
+  }
+}
+
+function signedPoints(n) {
+  return `${n >= 0 ? '+' : ''}${n}`;
+}
+
+const DAY_TYPE_LABELS = { boy: 'Boy Day', girl: 'Girl Day', both: 'Both (Double Elimination)' };
+const SAFE_PICK_STATUS_TEXT = { hit: 'Survived', miss: 'Eliminated', reserved: 'Not scored (back in reserve)' };
+
+/** Manager history modal — opens from tapping a name on the Leaderboard. One block per finalized
+ *  week (newest first): each rostered player with what they scored and how, then the safe
+ *  pick(s) and their result. Reuses the cast bio modal's overlay element and stats styling;
+ *  computed fresh from the Gist every open, same as the cast stats modal. */
+export function renderManagerHistoryModal(modalEl, state, managerId) {
+  const row = computeLeaderboard(state).find((r) => r.managerId === managerId);
+  const weeks = computeManagerHistoryByWeek(state, managerId);
+  const weekBlocks = weeks
+    .map((w) => {
+      const rosterLines = w.roster
+        .map((r) => {
+          const details = r.events.map((e) => {
+            const label = SCORING_EVENT_LABELS[e.type] ?? e.type;
+            return `${label}${e.count > 1 ? ` x${e.count}` : ''} ${signedPoints(e.points)}`;
+          });
+          if (r.survivedBonus) details.push(`Survived ${signedPoints(r.survivedBonus)}`);
+          if (r.eliminatedThisEpisode) details.push('Eliminated');
+          return `
+            <li class="hist-player ${r.eliminatedThisEpisode ? 'out' : ''}">
+              <div class="hist-player-row"><span>${castName(state, r.castId)}</span><span>${signedPoints(r.total)}</span></div>
+              ${details.length ? `<div class="hist-player-detail">${details.join(' &middot; ')}</div>` : ''}
+            </li>
+          `;
+        })
+        .join('');
+      const safeLines = w.safePicks.length
+        ? w.safePicks
+            .map(
+              (p) => `
+                <li class="hist-player hist-sp-${p.status}">
+                  <div class="hist-player-row"><span>${castNameWithGender(state, p.castId)}</span><span>${p.status === 'reserved' ? '&mdash;' : signedPoints(p.points)}</span></div>
+                  <div class="hist-player-detail">${SAFE_PICK_STATUS_TEXT[p.status]}</div>
+                </li>
+              `
+            )
+            .join('')
+        : `<li class="stats-none">No safe pick submitted</li>`;
+      return `
+        <div class="stats-week">
+          <div class="stats-week-header">Week ${w.week} <span>${signedPoints(w.total)} pts</span></div>
+          <div class="hist-label">Roster &middot; ${signedPoints(w.rosterPoints)}</div>
+          <ul class="hist-list">${rosterLines || '<li class="stats-none">No roster this week</li>'}</ul>
+          <div class="hist-label">Safe Pick${w.safePicks.length > 1 ? 's' : ''} &middot; ${signedPoints(w.safePickPoints)}${w.dual ? ` <span class="hist-daytype">${DAY_TYPE_LABELS[w.dayType] ?? ''}</span>` : ''}</div>
+          <ul class="hist-list">${safeLines}</ul>
+        </div>
+      `;
+    })
+    .join('');
+  const bonusLine = row?.bonusPoints ? `<p class="bio-meta">Season-end bonus: ${signedPoints(row.bonusPoints)}</p>` : '';
+  modalEl.innerHTML = `
+    <div class="modal-card bio-card">
+      <button id="bio-close-btn" class="bio-close" aria-label="Close">&times;</button>
+      <h3>${managerName(state, managerId)}</h3>
+      ${row ? `<p class="bio-meta">#${row.rank} &middot; ${row.grandTotal} pts total</p>` : ''}
+      ${bonusLine}
+      <div class="stats-breakdown">
+        <h4>Week by Week</h4>
+        ${weekBlocks || '<p class="bio-meta">No episodes scored yet.</p>'}
+      </div>
     </div>
   `;
   modalEl.querySelector('#bio-close-btn').addEventListener('click', () => {

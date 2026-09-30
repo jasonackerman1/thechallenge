@@ -282,24 +282,63 @@ export function computeCastPointsBreakdownByWeek(state, castId) {
     .map((week) => {
       const episode = state.episodes.find((e) => e.episodeNumber === week);
       const rosteredThisWeek = allRosteredCastIdsForWeek(state, week).has(castId);
-      const eventsByType = new Map();
-      for (const event of episode.scoringEvents ?? []) {
-        if (event.castId !== castId) continue;
-        const count = event.count ?? 1;
-        const entry = eventsByType.get(event.type) ?? { count: 0, points: 0 };
-        entry.count += count;
-        entry.points += (SCORING_EVENT_POINTS[event.type] ?? 0) * count;
-        eventsByType.set(event.type, entry);
-      }
-      const eliminatedThisEpisode = isEliminatedAsOf(castId, week, eliminationEpisodes);
-      const survivedBonus = rosteredThisWeek && !eliminatedThisEpisode ? SURVIVED_WEEK_POINTS : 0;
-      return {
-        week,
-        events: [...eventsByType.entries()].map(([type, { count, points }]) => ({ type, count, points })),
-        survivedBonus,
-        eliminatedThisEpisode,
-        total: computeCastPointsForEpisode(episode, castId, rosteredThisWeek, eliminationEpisodes),
-      };
+      return { week, ...castEpisodeBreakdown(episode, castId, rosteredThisWeek, eliminationEpisodes) };
+    });
+}
+
+/** One cast member's scoring detail for one episode — shared by the cast stats modal above and
+ *  the manager history modal below, so both always agree with computeCastPointsForEpisode. */
+function castEpisodeBreakdown(episode, castId, rosteredThisWeek, eliminationEpisodes) {
+  const eventsByType = new Map();
+  for (const event of episode.scoringEvents ?? []) {
+    if (event.castId !== castId) continue;
+    const count = event.count ?? 1;
+    const entry = eventsByType.get(event.type) ?? { count: 0, points: 0 };
+    entry.count += count;
+    entry.points += (SCORING_EVENT_POINTS[event.type] ?? 0) * count;
+    eventsByType.set(event.type, entry);
+  }
+  const eliminatedThisEpisode = isEliminatedAsOf(castId, episode.episodeNumber, eliminationEpisodes);
+  const survivedBonus = rosteredThisWeek && !eliminatedThisEpisode ? SURVIVED_WEEK_POINTS : 0;
+  return {
+    events: [...eventsByType.entries()].map(([type, { count, points }]) => ({ type, count, points })),
+    survivedBonus,
+    eliminatedThisEpisode,
+    total: computeCastPointsForEpisode(episode, castId, rosteredThisWeek, eliminationEpisodes),
+  };
+}
+
+/** A manager's full scoring history, one entry per finalized episode (newest first): who was on
+ *  their roster that week and what each one scored, plus how their safe pick(s) turned out
+ *  ('hit' = survived, +10; 'miss' = eliminated, 0; 'reserved' = dual week, other gender's day,
+ *  unscored and back in reserve). Totals come from the same functions the leaderboard uses, so
+ *  the history always adds up to the standings. Used by the leaderboard's tap-a-name modal. */
+export function computeManagerHistoryByWeek(state, managerId) {
+  const eliminationEpisodes = computeEliminationEpisodes(state.episodes);
+  return finalizedWeeks(state)
+    .slice()
+    .sort((a, b) => b - a)
+    .map((week) => {
+      const episode = state.episodes.find((e) => e.episodeNumber === week);
+      const roster = (getRosterForWeek(state, week).get(managerId) ?? []).map((castId) => ({
+        castId,
+        ...castEpisodeBreakdown(episode, castId, true, eliminationEpisodes),
+      }));
+      const eliminatedIds = new Set((episode.eliminations ?? []).map((e) => e.castId));
+      const dual = isDualSafePickWeek(week);
+      const dayType = episode.safePickDayType ?? 'both';
+      const safePicks = (state.safePicks?.[String(week)] ?? [])
+        .filter((p) => p.managerId === managerId)
+        .map((p) => {
+          if (dual && !safePickGenderIncluded(dayType, castGender(state, p.castId))) {
+            return { castId: p.castId, status: 'reserved', points: 0 };
+          }
+          const hit = !eliminatedIds.has(p.castId);
+          return { castId: p.castId, status: hit ? 'hit' : 'miss', points: hit ? SAFE_PICK_POINTS : 0 };
+        });
+      const rosterPoints = computeRosterPointsForManagerWeek(state, managerId, week);
+      const safePickPoints = computeSafePickPointsForManagerWeek(state, managerId, week);
+      return { week, dual, dayType, roster, safePicks, rosterPoints, safePickPoints, total: rosterPoints + safePickPoints };
     });
 }
 

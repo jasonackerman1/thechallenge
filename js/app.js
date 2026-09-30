@@ -27,6 +27,7 @@ import {
   renderIdentityModal,
   renderIdentityIndicator,
   renderLeaderboard,
+  renderManagerHistoryModal,
   renderMyRoster,
   renderSafePick,
   renderPreseasonBonusPick,
@@ -174,7 +175,13 @@ function renderPlayerView() {
     els.castBrowserSection.open = true;
   }
 
-  renderLeaderboard(els.leaderboardContainer, currentState, currentManagerId);
+  renderLeaderboard(els.leaderboardContainer, currentState, currentManagerId, {
+    onManagerClick: (managerId) => {
+      renderManagerHistoryModal(els.castBioModal, currentState, managerId);
+      els.castBioModal.style.display = 'flex';
+      els.castBioModal.scrollTop = 0;
+    },
+  });
   renderMyRoster(els.myRosterContainer, currentState, currentManagerId, {
     onPick: (castId) =>
       runMutation((fresh) => {

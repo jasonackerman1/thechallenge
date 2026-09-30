@@ -228,6 +228,9 @@
       line-height: 1;
       cursor: pointer;
       padding: 4px;
+      width: auto;
+      min-width: 0;
+      z-index: 1;
     }
     .bio-photo {
       width: 140px;
@@ -276,7 +279,18 @@
     }
     .lb-row.rank-1 .lb-rank { color: var(--neon-red); }
     .lb-info { flex: 1; min-width: 0; }
-    .lb-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+    .lb-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; background: none; border: none; padding: 0; color: inherit; font-family: inherit; text-align: left; cursor: pointer; display: flex; align-items: center; flex-wrap: wrap; gap: 0 6px; width: 100%; }
+    .lb-name .lb-name-hint { margin-left: auto; font-size: 0.65rem; font-weight: 600; color: var(--neon-blue); letter-spacing: 0.03em; }
+    .hist-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 8px 0 2px; }
+    .hist-daytype { text-transform: none; font-weight: 600; color: var(--neon-blue); }
+    .hist-list { list-style: none; margin: 0 !important; padding: 0 !important; }
+    .hist-player { padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .hist-player:last-child { border-bottom: none; }
+    .hist-player-row { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--text, #fff); }
+    .hist-player-detail { font-size: 0.72rem; color: var(--text-muted); margin-top: 1px; }
+    .hist-player.out .hist-player-row span:first-child { text-decoration: line-through; color: var(--text-muted); }
+    .hist-sp-miss .hist-player-detail { color: var(--neon-red); }
+    .hist-sp-reserved { opacity: 0.6; }
     .lb-name .you-tag {
       font-size: 0.6rem;
       font-weight: 700;

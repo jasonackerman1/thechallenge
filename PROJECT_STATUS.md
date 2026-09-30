@@ -53,6 +53,19 @@ updates), `2e03116` (Commissioner panel visual design pass), `0145a21` (redraft-
 toggle), and everything before that (PWA shell, Milestone 4, etc. — see history further below). No
 local uncommitted changes, no untracked files, all on `origin/main`.
 
+## Leaderboard: tap a manager's name to see their week-by-week history — 2026-09-29
+
+Jay asked for a way to see what each manager did week to week. Every leaderboard name is now a
+button (with a small "History >" hint) that opens a modal: rank + total, then one block per scored
+week (newest first) showing that week's roster, what each player scored and why (events, Survived
+bonus, eliminated), and the safe pick(s) with their result (Survived +10 / Eliminated / Not scored,
+back in reserve on dual weeks, with the Boy/Girl/Both day type). Display-only, all read from data
+already in the Gist. New `computeManagerHistoryByWeek()` in `js/scoring.js` reuses the leaderboard's
+own point functions, so each manager's weekly totals add up exactly to their leaderboard total
+(checked for all 6 managers on synthetic data). Also fixed the modal's close X, which a global
+button rule had stretched full width (now truly top-right, cast bio modal too). Verified with a
+mocked-Gist headless browser run: zero console errors, no real GitHub calls.
+
 ## Safe Pick lock fix + Week 4+ boy/girl dual Safe Picks — 2026-08-13 (`50d941a`)
 
 Jay reported Week 3 scoring was clunky: a manager tried to resubmit his already-locked Week 3
