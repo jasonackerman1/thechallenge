@@ -1,4 +1,42 @@
-# Project Status — updated 2026-08-13 (everything below confirmed deployed live via direct byte-grep of jasonackerman1.github.io)
+# Project Status — updated 2026-10-20
+
+## LATEST (2026-10-20): heading into the final, Safe Picks fixed for managers who've run out
+
+**Where the season is:** Episode 13 (airs 2026-10-21) is Day 1 of the final; Episode 14 is Day 2.
+No eliminations happen in the final. Team format; Jay expects Orange to beat the merged Blue/Gray
+team. Reunion unknown (maybe live after the season). **Jay is redrafting every week through the
+end** — do not suggest freezing rosters.
+
+**League rule confirmed by Jay (consistent with past seasons): Safe Picks stay on through the
+final.** If you have no one left to pick, you get no points. If you only have one gender left, you
+pick just that one. Jay scores the final episodes as **Both** day type: two picks = 20, one pick = 10.
+
+**Fix shipped, commit `39e1caa`, confirmed live (served `scoring.js` contains the new helper,
+`sw.js` CACHE_NAME = `challenge-fantasy-v3`):** before this, Week 4+ Submit refused to save unless
+both a boy AND a girl were picked, so a manager out of one gender was locked out entirely, and
+Reminders flagged them as missing forever. Now:
+- New `eligibleSafePickCastIds(state, managerId, week, gender)` in `js/scoring.js` (not
+  eliminated, not used; that week's own picks stay eligible).
+- Player screen: an empty gender shows "Out of guy/girl picks" instead of a dropdown, button reads
+  "Submit"; out of both shows "You're out of Safe Picks."
+- `app.js` submit only requires a gender the manager still has someone in.
+- Commissioner Reminders only flag a gender with someone left.
+- Scoring unchanged. Verified with a synthetic Node test (not the real Gist).
+
+**Finalizing with zero eliminations works already** — Finalize only requires a day type, not any
+eliminations. Next-week Safe Picks open when that week's redraft is started (unchanged).
+
+**Also shipped since the last update (Jay's own commits, not documented before):** `d52d1fa` /
+`0080ed3` Commissioner Assign mode (place any player on any team, on/off switch shown after the
+redraft starts); `57246f1` / `6144d4a` tap a manager on the Leaderboard for week-by-week scoring
+history (commissioner-only).
+
+**Next:** score Episode 13 (Both), run the Week 14 redraft, score Episode 14, then enter the Final
+Challenge placements (winner/2nd/3rd checkboxes) to award season-end and Winners Circle points.
+
+---
+
+## Previous status — 2026-08-13 (everything below confirmed deployed live via direct byte-grep of jasonackerman1.github.io)
 
 Fantasy league PWA for MTV's *The Challenge* S42: Cutthroat. Full architecture plan lives at
 `/Users/jackerman/.claude/plans/i-m-building-a-fantasy-valiant-ocean.md` on Jay's machine — read
