@@ -504,30 +504,47 @@ function renderOpenSafePick(container, state, currentManagerId, week, { onSubmit
     return;
   }
 
+  // Late in the season a manager can run out of one gender (or both) — that dropdown is replaced
+  // with an "out" note and the pick isn't required. No pick there means no points on a day that
+  // gender scores.
+  const boysLeft = optionsFor('M', existingBoyPick?.castId) !== '';
+  const girlsLeft = optionsFor('F', existingGirlPick?.castId) !== '';
+  if (!boysLeft && !girlsLeft) {
+    container.innerHTML = `
+      ${priorWeekRecapHtml}
+      <p><strong>You're out of Safe Picks.</strong> Everyone you haven't used yet has been eliminated, so there's
+      nothing left to pick for Week ${week}.</p>
+      <div class="cast-grid compact">${cardsHtml}</div>
+    `;
+    return;
+  }
+  const outNote = (label) => `<span class="note" style="align-self:center;">Out of ${label} picks</span>`;
+
   container.innerHTML = `
     ${priorWeekRecapHtml}
-    <p>Pick who you think survives Week ${week}'s episode &mdash; one boy, one girl, both required.
+    <p>Pick who you think survives Week ${week}'s episode &mdash; one boy, one girl, both required
+    (unless you're out of one &mdash; then just pick the other).
     Once the episode airs, the commissioner will mark it a Boy Day, Girl Day, or Double Elimination;
     whichever pick doesn't apply goes back in reserve so you can use that cast member again another
     week. +${SAFE_PICK_POINTS} points per pick that survives and actually scores.</p>
     <p><strong>Current picks:</strong>
-      Boy &mdash; ${existingBoyPick ? castName(state, existingBoyPick.castId) : '(none yet)'}
+      Boy &mdash; ${existingBoyPick ? castName(state, existingBoyPick.castId) : boysLeft ? '(none yet)' : '(out)'}
       ${existingBoyPick ? `<button id="safe-pick-clear-boy-btn" class="btn-inline" style="background:#7a2020;">Clear</button>` : ''}
       &nbsp;|&nbsp;
-      Girl &mdash; ${existingGirlPick ? castName(state, existingGirlPick.castId) : '(none yet)'}
+      Girl &mdash; ${existingGirlPick ? castName(state, existingGirlPick.castId) : girlsLeft ? '(none yet)' : '(out)'}
       ${existingGirlPick ? `<button id="safe-pick-clear-girl-btn" class="btn-inline" style="background:#7a2020;">Clear</button>` : ''}
     </p>
     <div class="control-row">
-      <select id="safe-pick-boy-select">${optionsFor('M', existingBoyPick?.castId)}</select>
-      <select id="safe-pick-girl-select">${optionsFor('F', existingGirlPick?.castId)}</select>
-      <button id="safe-pick-submit-btn">Submit Both</button>
+      ${boysLeft ? `<select id="safe-pick-boy-select">${optionsFor('M', existingBoyPick?.castId)}</select>` : outNote('guy')}
+      ${girlsLeft ? `<select id="safe-pick-girl-select">${optionsFor('F', existingGirlPick?.castId)}</select>` : outNote('girl')}
+      <button id="safe-pick-submit-btn">${boysLeft && girlsLeft ? 'Submit Both' : 'Submit'}</button>
     </div>
     <div class="cast-grid compact">${cardsHtml}</div>
   `;
 
   container.querySelector('#safe-pick-submit-btn').addEventListener('click', () => {
-    const boyCastId = container.querySelector('#safe-pick-boy-select').value;
-    const girlCastId = container.querySelector('#safe-pick-girl-select').value;
+    const boyCastId = container.querySelector('#safe-pick-boy-select')?.value ?? null;
+    const girlCastId = container.querySelector('#safe-pick-girl-select')?.value ?? null;
     onSubmitSafePick({ boyCastId, girlCastId });
   });
   container.querySelector('#safe-pick-clear-boy-btn')?.addEventListener('click', () => onClearSafePick('M'));

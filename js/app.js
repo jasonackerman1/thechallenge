@@ -5,7 +5,7 @@
 import { loadCredentials, saveCredentials, loadCachedState, saveCachedState, loadPlayerIdentity, savePlayerIdentity } from './state.js';
 import { fetchState, commitMutation, GistError } from './gist.js';
 import { buildInitialState, hashPassword } from './seed.js';
-import { computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks, isDualSafePickWeek, castGender } from './scoring.js';
+import { computeNextDraftOrder, computeEliminationEpisodes, getUsedSafePicks, isDualSafePickWeek, castGender, eligibleSafePickCastIds } from './scoring.js';
 import { shuffle, buildDraftBoard, buildStraightBoard, flattenDraftBoard, reorderRemainingSlots, TARGET_ROSTER_SIZE, validatePick } from './draft.js';
 import {
   renderPreseasonDraft,
@@ -255,9 +255,15 @@ function renderPlayerView() {
         };
 
         if (dual) {
-          if (!payload?.boyCastId || !payload?.girlCastId) throw new Error('Both a boy and a girl Safe Pick are required.');
-          upsertPick(payload.boyCastId);
-          upsertPick(payload.girlCastId);
+          // A gender is only required if the manager still has someone eligible in it — once
+          // they're out of guys (or girls), they submit just the other one.
+          const boysLeft = eligibleSafePickCastIds(fresh, managerId, week, 'M').length > 0;
+          const girlsLeft = eligibleSafePickCastIds(fresh, managerId, week, 'F').length > 0;
+          if (boysLeft && !payload?.boyCastId) throw new Error('A boy Safe Pick is required.');
+          if (girlsLeft && !payload?.girlCastId) throw new Error('A girl Safe Pick is required.');
+          if (!payload?.boyCastId && !payload?.girlCastId) throw new Error("You're out of Safe Picks.");
+          if (payload.boyCastId) upsertPick(payload.boyCastId);
+          if (payload.girlCastId) upsertPick(payload.girlCastId);
         } else {
           upsertPick(payload);
         }

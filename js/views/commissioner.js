@@ -11,6 +11,7 @@ import {
   computeSeasonEndBonusPoints,
   isDualSafePickWeek,
   castGender,
+  eligibleSafePickCastIds,
 } from '../scoring.js';
 import { managerName, castName, castNameWithGender } from './shared.js';
 
@@ -922,8 +923,9 @@ function missingSafePicks(state) {
     if (!m.active) return false;
     const picks = weekPicks.filter((p) => p.managerId === m.id);
     if (!dual) return picks.length === 0;
+    // Only flag a gender the manager still has someone left to pick in.
     const genders = new Set(picks.map((p) => castGender(state, p.castId)));
-    return !genders.has('M') || !genders.has('F');
+    return ['M', 'F'].some((g) => !genders.has(g) && eligibleSafePickCastIds(state, m.id, week, g).length > 0);
   });
   return { week, missing };
 }

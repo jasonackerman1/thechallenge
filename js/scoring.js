@@ -165,6 +165,19 @@ export function getUsedSafePicks(state, managerId) {
   return used;
 }
 
+/** Cast ids a manager could still pick for a given week's Safe Pick, optionally limited to one
+ *  gender — not eliminated, not already used. That week's own picks stay eligible (they're the
+ *  manager's current selection, not a prior use). Late in the season a manager can run out of
+ *  one gender entirely; an empty result means that gender just isn't required of them. */
+export function eligibleSafePickCastIds(state, managerId, week, gender = null) {
+  const eliminated = computeEliminationEpisodes(state.episodes);
+  const used = getUsedSafePicks(state, managerId);
+  (state.safePicks?.[String(week)] ?? []).filter((p) => p.managerId === managerId).forEach((p) => used.delete(p.castId));
+  return state.cast
+    .filter((c) => (gender ? c.gender === gender : true) && !eliminated.has(c.id) && !used.has(c.id))
+    .map((c) => c.id);
+}
+
 const finalizedWeeks = (state) =>
   state.episodes.filter((e) => e.finalized).map((e) => e.episodeNumber);
 

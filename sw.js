@@ -1,6 +1,6 @@
 // Bump this whenever the precache list changes OR any file in NETWORK_FIRST_FILES changes shape
 // in a way that needs old caches evicted. Files in CACHE_FIRST_FILES rarely change once shipped.
-const CACHE_NAME = "challenge-fantasy-v2";
+const CACHE_NAME = "challenge-fantasy-v3";
 
 const CAST_SLUGS = [
   "adrienne", "anna-leigh", "bananas", "brad", "cara-maria", "cassidy", "cedric", "chris",
