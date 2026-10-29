@@ -402,12 +402,25 @@ export function computeLeaderboard(state) {
   const weeks = finalizedWeeks(state);
   const currentWeek = weeks.length ? Math.max(...weeks) : null;
 
-  return standings.map((s, index) => ({
-    ...s,
-    rank: index + 1,
-    thisWeekRosterPoints: currentWeek ? computeRosterPointsForManagerWeek(state, s.managerId, currentWeek) : 0,
-    thisWeekSafePickPoints: currentWeek ? computeSafePickPointsForManagerWeek(state, s.managerId, currentWeek) : 0,
-    bonusPoints: bonusPoints.get(s.managerId) ?? 0,
-    grandTotal: s.total + (bonusPoints.get(s.managerId) ?? 0),
-  }));
+  // Rank by grandTotal (what the leaderboard displays), not the pre-bonus total. Array sort is
+  // stable, so ties keep computeStandings' tiebreak order. Once the season is over, the
+  // commissioner plays for fun but can't be crowned: they keep their points but get no rank
+  // (null), and the players are numbered 1..n so the top player is the champion.
+  const seasonOver = Boolean(state.finalChallenge?.completed);
+  const commissionerIds = new Set(state.managers.filter((m) => m.isCommissioner).map((m) => m.id));
+  let nextRank = 1;
+  return standings
+    .map((s) => ({
+      ...s,
+      thisWeekRosterPoints: currentWeek ? computeRosterPointsForManagerWeek(state, s.managerId, currentWeek) : 0,
+      thisWeekSafePickPoints: currentWeek ? computeSafePickPointsForManagerWeek(state, s.managerId, currentWeek) : 0,
+      bonusPoints: bonusPoints.get(s.managerId) ?? 0,
+      grandTotal: s.total + (bonusPoints.get(s.managerId) ?? 0),
+    }))
+    .sort((a, b) => b.grandTotal - a.grandTotal)
+    .map((s) => {
+      const isCommissioner = commissionerIds.has(s.managerId);
+      const rank = seasonOver && isCommissioner ? null : nextRank++;
+      return { ...s, isCommissioner, rank, isChampion: seasonOver && rank === 1 };
+    });
 }

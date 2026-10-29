@@ -98,8 +98,8 @@ export function renderLeaderboard(container, state, currentManagerId, { onManage
             .join(', ')
         : '(no roster yet)';
       return `
-        <div class="lb-row ${isYou ? 'you' : ''} ${row.rank === 1 ? 'rank-1' : ''}">
-          <div class="lb-rank">${row.rank}</div>
+        <div class="lb-row ${isYou ? 'you' : ''} ${row.rank === 1 ? 'rank-1' : ''} ${row.rank === null ? 'lb-commish' : ''}">
+          <div class="lb-rank">${row.rank === null ? 'C' : row.isChampion ? '&#127942;' : row.rank}</div>
           <div class="lb-info">
             ${onManagerClick
               ? `<button type="button" class="lb-name" data-manager-id="${row.managerId}">${row.name}${isYou ? '<span class="you-tag">YOU</span>' : ''}<span class="lb-name-hint">History &rsaquo;</span></button>`
@@ -107,6 +107,7 @@ export function renderLeaderboard(container, state, currentManagerId, { onManage
             <div class="lb-bar-track"><div class="lb-bar-fill" style="width:${barPct}%"></div></div>
             <div class="lb-breakdown">This week +${row.thisWeekRosterPoints} &middot; Safe pick +${row.thisWeekSafePickPoints} &middot; Bonus +${row.bonusPoints}</div>
             <div class="lb-team">Team: ${teamText}</div>
+            ${row.rank === null ? '<div class="lb-commish-note">Commissioner &middot; played for fun, not eligible to win</div>' : ''}
           </div>
           <div class="lb-total">${row.grandTotal}</div>
         </div>
@@ -114,7 +115,18 @@ export function renderLeaderboard(container, state, currentManagerId, { onManage
     })
     .join('');
 
-  container.innerHTML = rowsHtml;
+  const champion = standings.find((s) => s.isChampion);
+  const championHtml = champion
+    ? `
+      <div class="champion-banner">
+        <div class="champion-trophy">&#127942;</div>
+        <div class="champion-label">Season 42 Champion</div>
+        <div class="champion-name">Congratulations, ${champion.name}!</div>
+        <div class="champion-points">${champion.grandTotal} points</div>
+      </div>`
+    : '';
+
+  container.innerHTML = championHtml + rowsHtml;
   if (onManagerClick) {
     container.querySelectorAll('.lb-name[data-manager-id]').forEach((btn) => {
       btn.addEventListener('click', () => onManagerClick(btn.dataset.managerId));
@@ -892,7 +904,7 @@ export function renderManagerHistoryModal(modalEl, state, managerId) {
     <div class="modal-card bio-card">
       <button id="bio-close-btn" class="bio-close" aria-label="Close">&times;</button>
       <h3>${managerName(state, managerId)}</h3>
-      ${row ? `<p class="bio-meta">#${row.rank} &middot; ${row.grandTotal} pts total</p>` : ''}
+      ${row ? `<p class="bio-meta">${row.rank === null ? 'Commissioner' : `#${row.rank}`} &middot; ${row.grandTotal} pts total</p>` : ''}
       ${bonusLine}
       <div class="stats-breakdown">
         <h4>Week by Week</h4>
